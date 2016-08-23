@@ -53,6 +53,12 @@ endif
 gtecnet_la_SOURCES = gtecnet.c device-helper.h device-helper.c
 gtecnet_la_LIBADD = $(GTECNET_LIBS) $(GNULIB)
 
+if LSL_SUPPORT
+pkglib_LTLIBRARIES += lsl.la
+endif
+lsl_la_SOURCES = lsl.c device-helper.h device-helper.c
+lsl_la_LIBADD = $(LSL_LIBS) $(GNULIB)
+
 if ARDUINO_SUPPORT
 pkglib_LTLIBRARIES += arduino.la
 endif

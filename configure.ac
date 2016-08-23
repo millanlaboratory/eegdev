@@ -202,6 +202,19 @@ AM_CONDITIONAL([GTECNET_SUPPORT], [test "x$gtecnet_support" = xyes])
 AC_SUBST([GTECNET_LIBS], "$LIBS")
 LIBS=$save_LIBS
 
+# LSL support
+save_LIBS=$LIBS
+AC_ARG_WITH([lsl], AC_HELP_STRING([--with-lsl],
+	                [Support for LSL backend @<:@default=no@:>@]),
+	    [], [with_lsl=no])
+AS_IF([test "x$with_lsl" != xno],
+      AC_SEARCH_LIBS([lsl_pull_sample_f], [lsl], [lsl_support=yes],
+        [lsl_support=no; if test "x$with_lsl" != xcheck; then
+             AC_MSG_FAILURE([lsl library required for LSL support])
+         fi]), [lsl_support=no])
+AM_CONDITIONAL([LSL_SUPPORT], [test "x$lsl_support" = xyes])
+AC_SUBST([LSL_LIBS], "$LIBS")
+LIBS=$save_LIBS
 
 # Arduino support
 save_LIBS=$LIBS
@@ -254,5 +267,6 @@ Configuration summary
     BARV support     : $barv_support
     BBT support	     : $bbt_support
     gTecNet support  : $gtecnet_support
+    LSL support      : $lsl_support
     Arduino support  : $arduino_support
 "
