@@ -63,30 +63,25 @@ static void* lsl_read_fn(void* arg)
 {
 	struct lsl_eegdev* lsldev = arg;
 	const struct core_interface* restrict ci = &lsldev->dev.ci;
-	int runacq, nval, errcode;
-	nval = lsldev->ChunkSize * lsldev->NChannelAll;
-	float databuffer[8];
-	fprintf(stdout, "nval = %d\n",nval);
-	double timestampbuffer[8];
+	int runacq, errcode;
+	int nval = (lsldev->ChunkSize == 0)?10:lsldev->ChunkSize * lsldev->NChannelAll;
+	fprintf(stdout,"nval = %d\n",nval);
+	float databuffer[nval];
+	double timestampbuffer[nval];
 	
 	while (1) {
 		pthread_mutex_lock(&(lsldev->acqlock));
 		runacq = lsldev->runacq;
 		pthread_mutex_unlock(&(lsldev->acqlock));
 		if (!runacq)
-			break;
-		double timestamp = lsl_pull_sample_f(lsldev->inlet,databuffer,8,LSL_FOREVER,&errcode);			
-		//unsigned long NValues = lsl_pull_chunk_f(lsldev->inlet, databuffer, timestampbuffer, 80, 80, LSL_FOREVER, &errcode);
-		for (int k=0; k<8; ++k)
-			printf("\t%.1f",databuffer[k]);
-		printf("\n");
-		//fprintf(stdout, "NValues = %f\n",NValues);
-		//fprintf(stdout, "error = %d\n",errcode);
-		//if(errcode != 0)
-		//	goto error;	
+			break;			
+		unsigned long NValues = lsl_pull_chunk_f(lsldev->inlet, databuffer, timestampbuffer, nval, nval, LSL_FOREVER, &errcode);
+		fprintf(stdout,"NValues = %d\n",NValues);
+		if(errcode != 0)
+			goto error;	
 		
 		// Update the eegdev structure with the new data
-		if (ci->update_ringbuffer(&(lsldev->dev), databuffer, 8*sizeof(float)))
+		if (ci->update_ringbuffer(&(lsldev->dev), databuffer, nval*sizeof(float)))
 			break;
 	
 	}
@@ -111,27 +106,18 @@ int lsl_set_capability(struct lsl_eegdev* lsldev)
 	lsl_xml_ptr chn = lsl_child(lsl_child(lsl_get_desc(lsldev->fullstreaminfo),"channels"),"channel");
     	for (int c=0; c<lsldev->NChannelAll; c++) {
 		char* chantype = lsl_child_value_n(chn,"type");
-		fprintf(stdout,"Type = %s",chantype);
 		if (strcmp(chantype,"EEG")==0) {
-			fprintf(stdout,"AAAAAAAAAAAAAAAAAAAAAAA\n");
 			cap.type_nch[EGD_EEG]++;
 		} else {
-			fprintf(stdout,"BBBBBBBBBBBBBBBBBBBBBBB\n");
 			cap.type_nch[EGD_SENSOR]++;
 		}
 		
 		lsldev->ChannelLabel[c] = lsl_child_value_n(chn,"label");
 		lsldev->ChannelUnit[c] = lsl_child_value_n(chn,"unit");
-		fprintf(stdout, "Lbl = %s\n",lsldev->ChannelLabel[c]);
-		fprintf(stdout, "Unit = %s\n",lsldev->ChannelUnit[c]);
-		fprintf(stdout, "type = %s\n",lsl_child_value_n(chn,"type"));
         	chn = lsl_next_sibling(chn);
     	}
 
 	struct devmodule* dev = &lsldev->dev;
-
-	fprintf(stdout, "Nchan = %d\n",lsldev->NChannelAll);
-	fprintf(stdout, "SF = %d\n",cap.sampling_freq);
 	dev->ci.set_cap(dev, &cap);
 	dev->ci.set_input_samlen(dev, lsldev->NChannelAll * sizeof(int32_t));
 	return 0;
@@ -152,6 +138,7 @@ int lsl_open_device(struct devmodule* dev, const char* optv[])
 		return -1;
 
 	int sf = (int)lsl_get_nominal_srate(lsldev->streaminfo);
+	fprintf(stdout,"sf = %d\n",sf);
 	if(sf%16 == 0){
 		lsldev->ChunkSize = (int)(sf/16.0);
 	}else if(sf%10 == 0){
@@ -159,8 +146,7 @@ int lsl_open_device(struct devmodule* dev, const char* optv[])
 	}else{
 		lsldev->ChunkSize = 0;
 	}
-
-	fprintf(stdout, "ChunkSize = %d\n",lsldev->ChunkSize);
+	fprintf(stdout,"ChunkSize = %d\n",lsldev->ChunkSize);
 	lsldev->NChannelAll = lsl_get_channel_count(lsldev->streaminfo);
 	lsldev->ChannelLabel = (char**)malloc(lsldev->NChannelAll*sizeof(char*));
 	lsldev->ChannelUnit = (char**)malloc(lsldev->NChannelAll*sizeof(char*));
@@ -170,11 +156,8 @@ int lsl_open_device(struct devmodule* dev, const char* optv[])
 	}
 
 	/* make an inlet to read data from the stream (buffer max. 360 second of data, chunking as defined above, automatic recovery enabled) */
-	lsldev->inlet = lsl_create_inlet(lsldev->streaminfo, 360, 0, 1);
+	lsldev->inlet = lsl_create_inlet(lsldev->streaminfo, 360, lsldev->ChunkSize, 1);
 	lsldev->fullstreaminfo = lsl_get_fullinfo(lsldev->inlet,LSL_FOREVER,&errcode);
-	if (errcode != 0)
-		return errcode;
-
 	if (errcode != 0)
 		return errcode;
 
