@@ -64,10 +64,11 @@ static void* lsl_read_fn(void* arg)
 	struct lsl_eegdev* lsldev = arg;
 	const struct core_interface* restrict ci = &lsldev->dev.ci;
 	int runacq, errcode;
-	int nval = (lsldev->ChunkSize == 0)?10:lsldev->ChunkSize * lsldev->NChannelAll;
-	fprintf(stdout,"nval = %d\n",nval);
-	float databuffer[nval];
-	double timestampbuffer[nval];
+	int ChunkSizeInSamples = (lsldev->ChunkSize == 0)?10:lsldev->ChunkSize;
+	int DataBufferSizeInFloats =  ChunkSizeInSamples * lsldev->NChannelAll;
+	int TimestampBufferSizeInFloats =  ChunkSizeInSamples;
+	float databuffer[DataBufferSizeInFloats];
+	double timestampbuffer[TimestampBufferSizeInFloats];
 	
 	while (1) {
 		pthread_mutex_lock(&(lsldev->acqlock));
@@ -75,13 +76,12 @@ static void* lsl_read_fn(void* arg)
 		pthread_mutex_unlock(&(lsldev->acqlock));
 		if (!runacq)
 			break;			
-		unsigned long NValues = lsl_pull_chunk_f(lsldev->inlet, databuffer, timestampbuffer, nval, nval, LSL_FOREVER, &errcode);
-		fprintf(stdout,"NValues = %d\n",NValues);
+		unsigned long NValues = lsl_pull_chunk_f(lsldev->inlet, databuffer, timestampbuffer, DataBufferSizeInFloats, TimestampBufferSizeInFloats, LSL_FOREVER, &errcode);
 		if(errcode != 0)
 			goto error;	
 		
 		// Update the eegdev structure with the new data
-		if (ci->update_ringbuffer(&(lsldev->dev), databuffer, nval*sizeof(float)))
+		if (ci->update_ringbuffer(&(lsldev->dev), databuffer, DataBufferSizeInFloats*sizeof(float)))
 			break;
 	
 	}
@@ -138,7 +138,6 @@ int lsl_open_device(struct devmodule* dev, const char* optv[])
 		return -1;
 
 	int sf = (int)lsl_get_nominal_srate(lsldev->streaminfo);
-	fprintf(stdout,"sf = %d\n",sf);
 	if(sf%16 == 0){
 		lsldev->ChunkSize = (int)(sf/16.0);
 	}else if(sf%10 == 0){
@@ -146,7 +145,6 @@ int lsl_open_device(struct devmodule* dev, const char* optv[])
 	}else{
 		lsldev->ChunkSize = 0;
 	}
-	fprintf(stdout,"ChunkSize = %d\n",lsldev->ChunkSize);
 	lsldev->NChannelAll = lsl_get_channel_count(lsldev->streaminfo);
 	lsldev->ChannelLabel = (char**)malloc(lsldev->NChannelAll*sizeof(char*));
 	lsldev->ChannelUnit = (char**)malloc(lsldev->NChannelAll*sizeof(char*));
