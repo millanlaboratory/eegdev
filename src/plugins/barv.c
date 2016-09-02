@@ -120,18 +120,13 @@ void egdi_set_gval(union gval* dst, int type, double val)
  *                       BARV internals                     	  *
  ******************************************************************/
 
-static const char* labeltemplate[EGD_NUM_STYPE] = {
-	[EGD_EEG] = "eeg:%u", 
-	[EGD_SENSOR] = "sensor:%u", 
-	[EGD_TRIGGER] = "trigger:%u"
-};
 static const char analog_unit[] = "uV";
 static const char trigger_unit[] = "Boolean";
 static const char analog_transducter[] = "Active Electrode";
 static const char trigger_transducter[] = "Triggers and Status";
 static const char trigger_prefiltering[] = "No filtering";
 static const char barv_device_type[] = "BrainAmp Recorder/RecView";
-
+static const char trilabel[8] = "triggers";
 
 static
 const struct egdi_signal_info barv_siginfo[2] = {
@@ -294,10 +289,7 @@ void* barv_read_fn(void *data)
 					tdev->nch = tdev->nch + 1;
 
 					// Add info for trigger channel
-					char* trigStr = "trigger";					
-					char* trigLbl = (char*)malloc((strlen(trigStr)+1)*sizeof(char));
-					memcpy(trigLbl,trigStr,strlen(trigStr)+1);
-					tdev->chmap[nChannels].label = trigLbl;
+					tdev->chmap[nChannels].label = trilabel;
 					tdev->chmap[nChannels].stype = EGD_TRIGGER;
 					siginf[nChannels] = barv_siginfo[1];
 					siginf[nChannels].scale = 1.0;
@@ -651,9 +643,9 @@ void barv_fill_chinfo(const struct devmodule* dev, int stype,
 	struct barv_eegdev* tdev = get_barv(dev);
 	pthread_mutex_lock(&tdev->mtx);
 
-	info->label = tdev->chmap[ich].label;
 	pthread_mutex_unlock(&tdev->mtx);
 	if (stype != EGD_TRIGGER) {
+		info->label = tdev->chmap[ich].label;
 		info->isint = 0;
 		info->dtype = EGD_FLOAT;
 		info->min.valfloat = -16384.0;
@@ -662,6 +654,7 @@ void barv_fill_chinfo(const struct devmodule* dev, int stype,
 		info->transducter = analog_transducter;
 		info->prefiltering = "Unknown";
 	} else {
+		info->label = trilabel;
 		info->isint = 1;
 		info->dtype = EGD_INT32;
 		info->min.valint32_t = -8388608;
