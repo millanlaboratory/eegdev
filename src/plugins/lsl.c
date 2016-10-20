@@ -132,12 +132,16 @@ int lsl_open_device(struct devmodule* dev, const char* optv[])
 	int errcode, ret;
 	struct lsl_eegdev* lsldev = get_lsl(dev);
 	char* name = optv[0];
-
+	fprintf(stdout,"AAAA\n");
 	// Open the device
-	if (  lsl_resolve_byprop(&lsldev->streaminfo,1, "name",name, 1, 5.0) < 0)
+	int resolveRes = lsl_resolve_byprop(&(lsldev->streaminfo), 1000, "type","EEG", 1, LSL_FOREVER);
+	fprintf(stdout,"resolveRes = %d\n",resolveRes);
+	if ( resolveRes != 0){
 		return -1;
-
+	}
+	fprintf(stdout,"BBBB\n");
 	int sf = (int)lsl_get_nominal_srate(lsldev->streaminfo);
+	fprintf(stdout,"CCCC\n");
 	if(sf%16 == 0){
 		lsldev->ChunkSize = (int)(sf/16.0);
 	}else if(sf%10 == 0){

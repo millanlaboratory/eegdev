@@ -120,18 +120,13 @@ void egdi_set_gval(union gval* dst, int type, double val)
  *                       BARV internals                     	  *
  ******************************************************************/
 
-static const char* labeltemplate[EGD_NUM_STYPE] = {
-	[EGD_EEG] = "eeg:%u", 
-	[EGD_SENSOR] = "sensor:%u", 
-	[EGD_TRIGGER] = "trigger:%u"
-};
 static const char analog_unit[] = "uV";
 static const char trigger_unit[] = "Boolean";
 static const char analog_transducter[] = "Active Electrode";
 static const char trigger_transducter[] = "Triggers and Status";
 static const char trigger_prefiltering[] = "No filtering";
 static const char barv_device_type[] = "BrainAmp Recorder/RecView";
-
+static const char trilabel[8] = "triggers";
 
 static
 const struct egdi_signal_info barv_siginfo[2] = {
@@ -171,8 +166,8 @@ int barv_set_capability(struct barv_eegdev* barvdev, const char* guid, unsigned 
 		.mappings = &barv_mapping,
 		.device_type = barv_device_type,
 		.device_id = guid,
-		//.flags = EGDCAP_NOCP_CHMAP | EGDCAP_NOCP_DEVID | EGDCAP_NOCP_DEVTYPE | EGDCAP_NOCP_CHLABEL | 
-		//EGD_CAP_FS | EGD_CAP_TYPELIST
+		.flags = EGDCAP_NOCP_CHMAP | EGDCAP_NOCP_DEVID | EGDCAP_NOCP_DEVTYPE | EGDCAP_NOCP_CHLABEL | 
+		EGD_CAP_FS | EGD_CAP_TYPELIST
 	};
 
 	// And now downgrade to the stupid older interface
@@ -180,9 +175,8 @@ int barv_set_capability(struct barv_eegdev* barvdev, const char* guid, unsigned 
 
 	struct systemcap capold = {.type_nch = {0}};
 
-	for (unsigned int i=0; i<barvdev->nch; i++){
+	for (unsigned int i=0; i<barvdev->nch; i++)
 		capold.type_nch[barvdev->chmap[i].stype]++;
-	}
 	capold.sampling_freq = sf;
 	capold.device_type = barv_device_type;
 	capold.device_id = guid;
@@ -299,6 +293,7 @@ void* barv_read_fn(void *data)
 					char* trigLbl = (char*)malloc((strlen(trigStr)+1)*sizeof(char));
 					memcpy(trigLbl,trigStr,strlen(trigStr)+1);
 					tdev->chmap[nChannels].label = trigLbl;
+
 					tdev->chmap[nChannels].stype = EGD_TRIGGER;
 					siginf[nChannels] = barv_siginfo[1];
 					siginf[nChannels].scale = 1.0;
@@ -579,6 +574,7 @@ int barv_close_device(struct devmodule* dev)
 static
 int barv_open_device(struct devmodule* dev, const char* optv[])
 {
+	fprintf(stdout,"Opening barv plugin!!!!\n");
 
 	struct barv_eegdev* tdev = get_barv(dev);
 	unsigned short port = atoi(optv[OPT_PORT]);
@@ -586,6 +582,9 @@ int barv_open_device(struct devmodule* dev, const char* optv[])
 	size_t hostlen = url ? strlen(url) : 0;
 	char hoststring[hostlen + 1];
 	char* host = url ? hoststring : NULL;
+
+	fprintf(stdout,"Host = %s\n",host);
+	fprintf(stdout,"Port = %d\n",port);
 
 	tdev->datafd = -1;
 	pthread_mutex_lock(&tdev->mtx);
