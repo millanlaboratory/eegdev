@@ -171,8 +171,8 @@ int barv_set_capability(struct barv_eegdev* barvdev, const char* guid, unsigned 
 		.mappings = &barv_mapping,
 		.device_type = barv_device_type,
 		.device_id = guid,
-		.flags = EGDCAP_NOCP_CHMAP | EGDCAP_NOCP_DEVID | EGDCAP_NOCP_DEVTYPE | EGDCAP_NOCP_CHLABEL | 
-		EGD_CAP_FS | EGD_CAP_TYPELIST
+		//.flags = EGDCAP_NOCP_CHMAP | EGDCAP_NOCP_DEVID | EGDCAP_NOCP_DEVTYPE | EGDCAP_NOCP_CHLABEL | 
+		//EGD_CAP_FS | EGD_CAP_TYPELIST
 	};
 
 	// And now downgrade to the stupid older interface
@@ -180,8 +180,9 @@ int barv_set_capability(struct barv_eegdev* barvdev, const char* guid, unsigned 
 
 	struct systemcap capold = {.type_nch = {0}};
 
-	for (unsigned int i=0; i<barvdev->nch; i++)
+	for (unsigned int i=0; i<barvdev->nch; i++){
 		capold.type_nch[barvdev->chmap[i].stype]++;
+	}
 	capold.sampling_freq = sf;
 	capold.device_type = barv_device_type;
 	capold.device_id = guid;
@@ -294,7 +295,7 @@ void* barv_read_fn(void *data)
 					tdev->nch = tdev->nch + 1;
 
 					// Add info for trigger channel
-					char* trigStr = "trigger";					
+					char* trigStr = "triggers";					
 					char* trigLbl = (char*)malloc((strlen(trigStr)+1)*sizeof(char));
 					memcpy(trigLbl,trigStr,strlen(trigStr)+1);
 					tdev->chmap[nChannels].label = trigLbl;
@@ -578,7 +579,6 @@ int barv_close_device(struct devmodule* dev)
 static
 int barv_open_device(struct devmodule* dev, const char* optv[])
 {
-	fprintf(stdout,"Opening barv plugin!!!!\n");
 
 	struct barv_eegdev* tdev = get_barv(dev);
 	unsigned short port = atoi(optv[OPT_PORT]);
@@ -586,9 +586,6 @@ int barv_open_device(struct devmodule* dev, const char* optv[])
 	size_t hostlen = url ? strlen(url) : 0;
 	char hoststring[hostlen + 1];
 	char* host = url ? hoststring : NULL;
-
-	fprintf(stdout,"Host = %s\n",host);
-	fprintf(stdout,"Port = %d\n",port);
 
 	tdev->datafd = -1;
 	pthread_mutex_lock(&tdev->mtx);
@@ -651,9 +648,9 @@ void barv_fill_chinfo(const struct devmodule* dev, int stype,
 	struct barv_eegdev* tdev = get_barv(dev);
 	pthread_mutex_lock(&tdev->mtx);
 
-	info->label = tdev->chmap[ich].label;
 	pthread_mutex_unlock(&tdev->mtx);
 	if (stype != EGD_TRIGGER) {
+		info->label = tdev->chmap[ich].label;
 		info->isint = 0;
 		info->dtype = EGD_FLOAT;
 		info->min.valfloat = -16384.0;
@@ -662,6 +659,7 @@ void barv_fill_chinfo(const struct devmodule* dev, int stype,
 		info->transducter = analog_transducter;
 		info->prefiltering = "Unknown";
 	} else {
+		info->label = "triggers";
 		info->isint = 1;
 		info->dtype = EGD_INT32;
 		info->min.valint32_t = -8388608;
