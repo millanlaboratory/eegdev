@@ -36,6 +36,7 @@
 #include <netdb.h>
 #include <time.h>
 #include <arpa/inet.h>
+#include <regex.h>
 
 #include <eegdev-pluginapi.h>
 #include "RecorderRDA.h"
@@ -127,6 +128,7 @@ static const char trigger_transducter[] = "Triggers and Status";
 static const char trigger_prefiltering[] = "No filtering";
 static const char barv_device_type[] = "BrainAmp Recorder/RecView";
 static const char trilabel[8] = "triggers";
+static const char exg_regex[] = "((EOG|EXG|EMG|Eog|Emg|Exg|exg|emg|eog)[-:]?[[:digit:]]*)";
 
 static
 const struct egdi_signal_info barv_siginfo[2] = {
@@ -232,6 +234,7 @@ void* barv_read_fn(void *data)
 {
 	struct barv_eegdev* tdev = data;
 	const struct core_interface* restrict ci = &tdev->dev.ci;
+	regex_t exgre;
 
 	RDA_MessageHeader* pHeader = NULL;
 	int nResult = -1;
@@ -263,6 +266,8 @@ void* barv_read_fn(void *data)
 
 					struct egdi_signal_info* siginf = malloc((nChannels+1)*sizeof(struct egdi_signal_info));
 
+					// Compile regex
+					regcomp(&exgre, exg_regex, REG_EXTENDED|REG_NOSUB);
 					for (ULONG i = 0; i < nChannels; i++)
 					{
 						// Retrieve channel names and resolutions.
@@ -271,10 +276,12 @@ void* barv_read_fn(void *data)
 						
 						// Set channel labels
 						tdev->chmap[i].label = curLbl;
-						
 						// Set channel type
-						tdev->chmap[i].stype = EGD_EEG;
-
+						if (regexec(&exgre, curLbl, 0, NULL, 0) == 0){
+							tdev->chmap[i].stype = EGD_SENSOR;
+						} else {
+							tdev->chmap[i].stype = EGD_EEG;
+						}
 						// Set channel signal info
 						siginf[i] = barv_siginfo[0];
 						siginf[i].scale = pMsgStart->dResolutions[i];//Scale individually for each channel	
@@ -283,7 +290,7 @@ void* barv_read_fn(void *data)
 						// Set pointer to next entry
 						pszChannelNames += strlen(pszChannelNames) + 1;	
 					}
-
+					regfree(&exgre);
 					
 					// Now augment channels by one to accommodate trigger channel
 					tdev->nch = tdev->nch + 1;
@@ -574,17 +581,12 @@ int barv_close_device(struct devmodule* dev)
 static
 int barv_open_device(struct devmodule* dev, const char* optv[])
 {
-	fprintf(stdout,"Opening barv plugin!!!!\n");
-
 	struct barv_eegdev* tdev = get_barv(dev);
 	unsigned short port = atoi(optv[OPT_PORT]);
 	const char *url = optv[OPT_HOST];
 	size_t hostlen = url ? strlen(url) : 0;
 	char hoststring[hostlen + 1];
 	char* host = url ? hoststring : NULL;
-
-	fprintf(stdout,"Host = %s\n",host);
-	fprintf(stdout,"Port = %d\n",port);
 
 	tdev->datafd = -1;
 	pthread_mutex_lock(&tdev->mtx);
@@ -649,7 +651,18 @@ void barv_fill_chinfo(const struct devmodule* dev, int stype,
 
 	pthread_mutex_unlock(&tdev->mtx);
 	if (stype != EGD_TRIGGER) {
-		info->label = tdev->chmap[ich].label;
+		if(stype == EGD_EEG){
+			info->label = tdev->chmap[ich].label;
+		} else{
+			// It  is an EXG channel
+			char sensorstr[10];
+			char ichstr[3];
+			strcpy(sensorstr,"EXG");
+			sprintf(ichstr,"%d",(ich+1));
+			strcat(sensorstr,ichstr);
+			info->label = sensorstr;
+		}
+
 		info->isint = 0;
 		info->dtype = EGD_FLOAT;
 		info->min.valfloat = -16384.0;

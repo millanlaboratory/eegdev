@@ -10,7 +10,10 @@ BrainAmp Recorder and RecView RDA servers.
 .LP
 This plugin supports two options. The default values will be used
 if none of the configuration files nor the configuration string (see
-\fBegd_open\fP(3)) specify the option.
+\fBegd_open\fP(3)) specify the option. IMPORTANT NOTE: If there exist
+sensor channels (EMG, EOG, etc) the acceptable channel labels on the
+BrainAmp Recorder side so that they are recognized as such, are:
+EXGx, EOGx,EMGx,Exgx, Eogx,Emgx,exgx, eogx,emgx, where x a digit. 
 .TP
 .B host
 IP address of the machine running the Recorder/RecView software and doing 
