@@ -205,7 +205,8 @@ void* gtecnet_read_fn(void *data)
 	    	fprintf(stdout,"Waiting for data ready event timed out...\n");
 
             int ScansRead = gtecnal_ReadDataFrame(tdev->Transceiver, tdev->databuffer, tdev->SessionID, &tdev->sockdata, tdev->ScansPerFrame, tdev->DataPointsPerScan);
-            //gettimeofday(&end,NULL);
+            fprintf(stdout,"\n Trigger value = %f\n",tdev->databuffer[32]);
+	    //gettimeofday(&end,NULL);
 	    //float ElapsedTime = (float)1000*(end.tv_sec-start.tv_sec)+(end.tv_usec-start.tv_usec)/1000;
 	    //fprintf(stdout,"\n%f milliseconds for %d frames\n",ElapsedTime,ScansRead);
 	    ci->update_ringbuffer(&(tdev->dev), tdev->databuffer, ScansRead * tdev->DataPointsPerScan * sizeof(float));
@@ -238,7 +239,7 @@ int gtecnet_set_capability(struct gtecnet_eegdev* gtecnetdev)
 	}
 
         //TRIGGER
-        tdev->chmap[tdev->NchannelsEEG+tdev->NchannelsEXG].dtype = EGD_FLOAT; //EGD_INT32?
+        tdev->chmap[tdev->NchannelsEEG+tdev->NchannelsEXG].dtype = EGD_INT32;
         tdev->chmap[tdev->NchannelsEEG+tdev->NchannelsEXG].stype = EGD_TRIGGER;
 
 
@@ -397,9 +398,9 @@ int init_data_com(struct devmodule* dev, const char* optv[])
     	tdev->SamplingRate = tdev->devconf->sample_rate;
 	if( ( (tdev->SamplingRate % 10) == 0 )) { // This means the SF is multiple of 10 rather than of 2
 		if( tdev->SamplingRate <= 500) {
-			tdev->ScansPerFrame = (int)(tdev->SamplingRate/2); // Replace 16 Hz for 10 Hz when SF is multiple of 10
+			tdev->ScansPerFrame = (int)(tdev->SamplingRate/10); // Replace 16 Hz for 10 Hz when SF is multiple of 10
 		} else {
-			tdev->ScansPerFrame = (int)(tdev->SamplingRate/2); // Be more conservative (5 Hz) for high sampling rates
+			tdev->ScansPerFrame = (int)(tdev->SamplingRate/5); // Be more conservative (5 Hz) for high sampling rates
 		}
 	} else { // Sampling rate is a multiple of 2 Hz and for the gTec devices goes only up to 512 Hz
 		tdev->ScansPerFrame = (int)(tdev->SamplingRate/16);// 16 Hz for multiples of 2
@@ -502,8 +503,8 @@ static void gtecnet_fill_chinfo(const struct devmodule* dev, int stype,
 		info->transducter = gtecnettransducter;
 		info->prefiltering = "Unknown";
 	} else {
-		info->isint = 0;
-		info->dtype = EGD_FLOAT;
+		info->isint = 1;
+		info->dtype = EGD_INT32;
 		info->min.valint32_t = -8388608;
 		info->max.valint32_t = 8388607;
 		info->unit = gtecnetunit_trigger;
