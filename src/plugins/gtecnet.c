@@ -205,7 +205,7 @@ void* gtecnet_read_fn(void *data)
 	    	fprintf(stdout,"Waiting for data ready event timed out...\n");
 
             int ScansRead = gtecnal_ReadDataFrame(tdev->Transceiver, tdev->databuffer, tdev->SessionID, &tdev->sockdata, tdev->ScansPerFrame, tdev->DataPointsPerScan);
-            fprintf(stdout,"\n Trigger value = %f\n",tdev->databuffer[32]);
+            fprintf(stdout,"\n Trigger value = %d\n",(int)tdev->databuffer[32]);
 	    //gettimeofday(&end,NULL);
 	    //float ElapsedTime = (float)1000*(end.tv_sec-start.tv_sec)+(end.tv_usec-start.tv_usec)/1000;
 	    //fprintf(stdout,"\n%f milliseconds for %d frames\n",ElapsedTime,ScansRead);
@@ -239,7 +239,7 @@ int gtecnet_set_capability(struct gtecnet_eegdev* gtecnetdev)
 	}
 
         //TRIGGER
-        tdev->chmap[tdev->NchannelsEEG+tdev->NchannelsEXG].dtype = EGD_INT32;
+        tdev->chmap[tdev->NchannelsEEG+tdev->NchannelsEXG].dtype = EGD_FLOAT;
         tdev->chmap[tdev->NchannelsEEG+tdev->NchannelsEXG].stype = EGD_TRIGGER;
 
 
@@ -503,8 +503,8 @@ static void gtecnet_fill_chinfo(const struct devmodule* dev, int stype,
 		info->transducter = gtecnettransducter;
 		info->prefiltering = "Unknown";
 	} else {
-		info->isint = 1;
-		info->dtype = EGD_INT32;
+		info->isint = 0;
+		info->dtype = EGD_FLOAT;
 		info->min.valint32_t = -8388608;
 		info->max.valint32_t = 8388607;
 		info->unit = gtecnetunit_trigger;
