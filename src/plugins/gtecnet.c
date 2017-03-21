@@ -92,7 +92,7 @@ struct gtecnet_eegdev {
 #define DEFAULT_HOST_IP "192.168.1.1"
 #define DEFAULT_HOST_PORT "50223"
 
-#define DEFAULT_LOCAL_IP "192.168.1.101"
+#define DEFAULT_LOCAL_IP "192.168.1.10"
 #define DEFAULT_LOCAL_PORT "50220"
 
 #define DEFAULT_SAMPLING_RATE "512"
