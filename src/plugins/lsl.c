@@ -136,7 +136,7 @@ int lsl_open_device(struct devmodule* dev, const char* optv[])
 	// Open the device
 	int resolveRes = lsl_resolve_byprop(&(lsldev->streaminfo), 1000, "type","EEG", 1, LSL_FOREVER);
 	fprintf(stdout,"resolveRes = %d\n",resolveRes);
-	if ( resolveRes != 0){
+	if ( resolveRes < 0){
 		return -1;
 	}
 	fprintf(stdout,"BBBB\n");
