@@ -64,3 +64,9 @@ pkglib_LTLIBRARIES += arduino.la
 endif
 arduino_la_SOURCES = arduino.c device-helper.h device-helper.c
 arduino_la_LIBADD = $(ARDUINO_LIBS) $(GNULIB)
+
+if WSDSI_SUPPORT
+pkglib_LTLIBRARIES += wsdsi.la
+endif
+wsdsi_la_SOURCES = wsdsi.c DSI.h device-helper.h device-helper.c
+wsdsi_la_LIBADD = $(WSDSI_LIBS) $(GNULIB)

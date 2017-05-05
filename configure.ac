@@ -230,6 +230,20 @@ AM_CONDITIONAL([ARDUINO_SUPPORT], [test "x$arduino_support" = xyes])
 AC_SUBST([ARDUINO_LIBS], "$LIBS")
 LIBS=$save_LIBS
 
+# Wearable sensing DSI support
+save_LIBS=$LIBS
+AC_ARG_WITH([wsdsi], AC_HELP_STRING([--with-wsdsi],
+	                [Support for Wearable sensing DSI backend @<:@default=no@:>@]),
+	    [], [with_wsdsi=no])
+AS_IF([test "x$with_wsdsi" != xno],
+      AC_SEARCH_LIBS([DSI_Headset_Connect], [dsi], [wsdsi_support=yes],
+        [wsdsi_support=no; if test "x$with_wsdsi" != xcheck; then
+             AC_MSG_FAILURE([pthread library required for arduino support])
+         fi]), [arduino_support=no])
+AM_CONDITIONAL([WSDSI_SUPPORT], [test "x$wsdsi_support" = xyes])
+AC_SUBST([WSDSI_LIBS], "$LIBS")
+LIBS=$save_LIBS
+
 
 AX_DEFINE_DIR([LIBDIR], [libdir], [Installed library path])
 AX_DEFINE_DIR([SYSCONFDIR], [sysconfdir], [System configuration files path])
@@ -269,4 +283,5 @@ Configuration summary
     gTecNet support  : $gtecnet_support
     LSL support      : $lsl_support
     Arduino support  : $arduino_support
+    Wearable Sensing DSI support  : $wsdsi_support
 "
