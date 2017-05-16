@@ -40,7 +40,7 @@
 #endif
 
 // It should ABSOLUTELY be a power of two or the read call will fail
-#define CHUNKSIZE	(64*1024)
+#define CHUNKSIZE	(8*1024)
 #define NUMURB		2
 typedef const char  label4_t[4];
 
