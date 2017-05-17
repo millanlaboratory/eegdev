@@ -74,6 +74,6 @@ wsdsi_la_LIBADD = $(WSDSI_LIBS) $(GNULIB)
 if Q20_SUPPORT
 pkglib_LTLIBRARIES += q20.la
 endif
-q20_la_SOURCES = q20.c ftd2xx.h  device-helper.h device-helper.c
+q20_la_SOURCES = quick20.c ftd2xx.h  device-helper.h device-helper.c
 q20_la_LIBADD = $(Q20_LIBS) $(GNULIB)
 

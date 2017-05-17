@@ -239,7 +239,7 @@ AS_IF([test "x$with_wsdsi" != xno],
       AC_SEARCH_LIBS([DSI_Headset_Connect], [dsi], [wsdsi_support=yes],
         [wsdsi_support=no; if test "x$with_wsdsi" != xcheck; then
              AC_MSG_FAILURE([DSI library required for arduino support])
-         fi]), [arduino_support=no])
+         fi]), [wsdsi_support=no])
 AM_CONDITIONAL([WSDSI_SUPPORT], [test "x$wsdsi_support" = xyes])
 AC_SUBST([WSDSI_LIBS], "$LIBS")
 LIBS=$save_LIBS
