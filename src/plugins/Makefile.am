@@ -68,5 +68,12 @@ arduino_la_LIBADD = $(ARDUINO_LIBS) $(GNULIB)
 if WSDSI_SUPPORT
 pkglib_LTLIBRARIES += wsdsi.la
 endif
-wsdsi_la_SOURCES = wsdsi.c DSI.h device-helper.h device-helper.c
+wsdsi_la_SOURCES = wsdsi.c DSI.h DSI_API_Loader.c device-helper.h device-helper.c
 wsdsi_la_LIBADD = $(WSDSI_LIBS) $(GNULIB)
+
+if Q20_SUPPORT
+pkglib_LTLIBRARIES += q20.la
+endif
+q20_la_SOURCES = q20.c ftd2xx.h  device-helper.h device-helper.c
+q20_la_LIBADD = $(Q20_LIBS) $(GNULIB)
+

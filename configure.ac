@@ -238,10 +238,24 @@ AC_ARG_WITH([wsdsi], AC_HELP_STRING([--with-wsdsi],
 AS_IF([test "x$with_wsdsi" != xno],
       AC_SEARCH_LIBS([DSI_Headset_Connect], [dsi], [wsdsi_support=yes],
         [wsdsi_support=no; if test "x$with_wsdsi" != xcheck; then
-             AC_MSG_FAILURE([pthread library required for arduino support])
+             AC_MSG_FAILURE([DSI library required for arduino support])
          fi]), [arduino_support=no])
 AM_CONDITIONAL([WSDSI_SUPPORT], [test "x$wsdsi_support" = xyes])
 AC_SUBST([WSDSI_LIBS], "$LIBS")
+LIBS=$save_LIBS
+
+# Cognionics Quick-20 support
+save_LIBS=$LIBS
+AC_ARG_WITH([q20], AC_HELP_STRING([--with-q20],
+	                [Support for Cognionics Quick-20 backend @<:@default=no@:>@]),
+	    [], [with_q20=no])
+AS_IF([test "x$with_q20" != xno],
+      AC_SEARCH_LIBS([FT_Open], [ftd2xx], [q20_support=yes],
+        [q20_support=no; if test "x$with_q20" != xcheck; then
+             AC_MSG_FAILURE([libftd2xx library required for q20 support])
+         fi]), [q20_support=no])
+AM_CONDITIONAL([Q20_SUPPORT], [test "x$q20_support" = xyes])
+AC_SUBST([Q20_LIBS], "$LIBS")
 LIBS=$save_LIBS
 
 
@@ -284,4 +298,5 @@ Configuration summary
     LSL support      : $lsl_support
     Arduino support  : $arduino_support
     Wearable Sensing DSI support  : $wsdsi_support
+    Cognionics Quick-20 support  : $q20_support
 "
