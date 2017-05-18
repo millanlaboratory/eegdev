@@ -37,6 +37,11 @@ case, the first system specified will be the master and the others will be
 the slaves (make sure the synchronization cable is plugged between each of
 them). \fBany\fP be used as well in a chain of systems. The resulting chain
 will appear as one eegdev device with more channels. Default value: "any".
+.TP
+.B commongndref
+Four-digit binary string specifying whether the corresponding channel group (1,2,3,4) 
+is set to common ground and reference ('1') or not ('0'). This option 
+applies to all devices if more than one are synced. Default value: "1111".
 .SH FILES
 .IP "/etc/eegdev/eegdev.conf" 4
 .PD
