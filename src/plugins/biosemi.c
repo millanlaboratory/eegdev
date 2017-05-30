@@ -346,6 +346,7 @@ static int parse_triggers(struct act2_eegdev* a2dev, uint32_t tri)
 	cap.type_nch[EGD_EEG] = eeg_nmax;
 	cap.type_nch[EGD_SENSOR] = arr_size - eeg_nmax - 2;
 	cap.type_nch[EGD_TRIGGER] = 1;
+
 	if (a2dev->optnch < cap.type_nch[EGD_EEG])
 			cap.type_nch[EGD_EEG] = a2dev->optnch;
 	dev->ci.set_cap(dev, &cap);
@@ -379,6 +380,7 @@ void process_usbbuf(struct act2_eegdev* a2dev, uint32_t* buf, ssize_t bs)
 			return;
 		}
 		buf[i+1] >>= 8;
+		buf[i+1] = buf[i+1] & 0x0000FFFF; // Simis addition to avoid bitand
 	}
 	a2dev->inoffset = (inoffset + bs)%slen;
 
