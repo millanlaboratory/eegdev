@@ -254,6 +254,12 @@ AS_IF([test "x$with_q20" != xno],
         [q20_support=no; if test "x$with_q20" != xcheck; then
              AC_MSG_FAILURE([libftd2xx library required for q20 support])
          fi]), [q20_support=no])
+AS_IF([test "x$with_q20" != xno],
+      AC_SEARCH_LIBS([dlopen], [dl], [q20_support=yes],
+        [q20_support=no; if test "x$with_q20" != xcheck; then
+             AC_MSG_FAILURE([libdl library required for q20 support])
+         fi]), [q20_support=no])
+
 AM_CONDITIONAL([Q20_SUPPORT], [test "x$q20_support" = xyes])
 AC_SUBST([Q20_LIBS], "$LIBS")
 LIBS=$save_LIBS

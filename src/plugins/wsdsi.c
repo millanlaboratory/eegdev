@@ -36,6 +36,7 @@
 #include <bluetooth/rfcomm.h>
 #include "DSI.h"
 #include <eegdev-pluginapi.h>
+#include <float.h>
 
 struct wsdsi_eegdev {
 
@@ -54,9 +55,9 @@ struct wsdsi_eegdev {
 #define get_wsdsi(dev_p) ((struct wsdsi_eegdev*)(dev_p))
 
 #define DEFAULT_PORT	"/dev/rfcomm40"
-#define DEFAULT_VERBOSITY	"2"
+#define DEFAULT_VERBOSITY	"0"
 #define DEFAULT_SAMPLEBATCH "1"
-#define DEFAULT_BUFFERAHEADSEC "0.01"
+#define DEFAULT_BUFFERAHEADSEC "0.0005"
 
 /******************************************************************
  *                       wsdsi internals                     	  *
@@ -64,15 +65,15 @@ struct wsdsi_eegdev {
 #define CODE	0xB0
 #define EXCODE 	0x55
 #define SYNC 	0xAA
-#define NCH 	21
+#define NCH 	19
 
 static const char wsdsilabel[NCH][10]= {
 	"Fp1", "Fp2", "Fz", "F3", "F4", "F7", "F8",
 	"Cz", "C3", "C4", "T3", "T4", "T5", "T6",
-	"Pz", "P3", "P4", "O1", "O2", "A1", "A2"
+	"Pz", "P3", "P4", "O1", "O2"
 };
 
-static const char * wsdsilabels = "Fp1,Fp2,Fz,F3,F4,F7,F8,Cz,C3,C4,T3,T4,T5,T6,Pz,P3,P4,O1,O2,A1,A2";
+static const char * wsdsilabels = "Fp1,Fp2,Fz,F3,F4,F7,F8,Cz,C3,C4,T3,T4,T5,T6,Pz,P3,P4,O1,O2";
 
 static const char wsdsiunit[] = "uV";
 static const char wsdsitransducter[] = "Dry electrode";
@@ -93,20 +94,20 @@ static const struct egdi_optname wsdsi_options[] = {
 	[NUMOPT] = {.name = NULL}
 };
 
-
+/*
 int Message( const char * msg, int debugLevel )
     {
         return fprintf( stderr, "DSI Message (level %d): %s\n", debugLevel, msg );
     }
 
-int CheckError( void )
+int Error( void )
     {
         if( DSI_Error() ) return fprintf( stderr, "%s\n", DSI_ClearError() );
         else return 0;
     }
 
-#define CHECK     if( CheckError() != 0 ) return -1;
-
+#define      if( Error() != 0 ) return -1;
+*/
 static
 int wsdsi_set_capability(struct wsdsi_eegdev* wsdsidev, const char* serialport)
 {
@@ -131,21 +132,19 @@ static void* wsdsi_read_fn(void* arg)
 
 	int runacq, ns;
 	double databuffer[NCH*wsdsidev->samplesPerBatch];
-	size_t samlen = NCH*sizeof(double)*wsdsidev->samplesPerBatch;
+	size_t samlen = sizeof(databuffer);
 	uint8_t c, pLength;
 
-	int targetExcessSamples = ( int )( 0.5 + DSI_Headset_GetSamplingRate( wsdsidev->h ) * wsdsidev->bufferAheadSec );
-	printf("%s\n", "SP SP SP SP");
-	printf("%f\n", wsdsidev->bufferAheadSec);
+	unsigned int targetExcessSamples = ( int )( 0.5 + DSI_Headset_GetSamplingRate( wsdsidev->h ) * wsdsidev->bufferAheadSec );
 
 	DSI_Headset_ConfigureBatch( wsdsidev->h, wsdsidev->samplesPerBatch, wsdsidev->bufferAheadSec );
 	DSI_Headset_StartBackgroundAcquisition( wsdsidev->h );
 
 
 	while (1) {
-		pthread_mutex_lock(&(wsdsidev->acqlock));
+		// pthread_mutex_lock(&(wsdsidev->acqlock));
 		runacq = wsdsidev->runacq;
-		pthread_mutex_unlock(&(wsdsidev->acqlock));
+		// pthread_mutex_unlock(&(wsdsidev->acqlock));
 		if (!runacq)
 			break;
 		
@@ -155,19 +154,20 @@ static void* wsdsi_read_fn(void* arg)
 			DSI_Channel c = DSI_Headset_GetChannelByIndex( wsdsidev->h, channelIndex );
 				for( int sampleIndex = 0; sampleIndex < wsdsidev->samplesPerBatch; sampleIndex++ ){
 					// The background thread is filling the buffers. This is where you empty them:
-					databuffer[channelIndex  + sampleIndex * wsdsidev->samplesPerBatch] = DSI_Channel_ReadBuffered( c );;
-					//printf("%s\n","BROUUU BIS");
+					databuffer[channelIndex * wsdsidev->samplesPerBatch  + sampleIndex ] = DSI_Channel_ReadBuffered( c );
+					// if (channelIndex == 1)
+						// printf("%s - %f\n","BROUUU BIS", databuffer[channelIndex * wsdsidev->samplesPerBatch  + sampleIndex ] );
 				}
 			}
-		/*
-		printf( "%9.4f,%3lu,%3lu,%3d,%3d\n",
-                DSI_Headset_SecondsSinceConnection( wsdsidev->h ),
-                DSI_Headset_GetNumberOfBufferedSamples( wsdsidev->h ),
-                DSI_Headset_GetNumberOfOverflowedSamples( wsdsidev->h ),
-                wsdsidev->samplesPerBatch,
-                targetExcessSamples
-            );
-*/
+		
+		// printf( "%9.4f,%3lu,%3lu,%3d,%3d\n",
+  //               DSI_Headset_SecondsSinceConnection( wsdsidev->h ),
+  //               DSI_Headset_GetNumberOfBufferedSamples( wsdsidev->h ),
+  //               DSI_Headset_GetNumberOfOverflowedSamples( wsdsidev->h ),
+  //               wsdsidev->samplesPerBatch,
+  //               targetExcessSamples
+  //           );
+		
 		// Update the eegdev structure with the new data
 		if (ci->update_ringbuffer(&(wsdsidev->dev), databuffer, samlen))
 			break;
@@ -196,12 +196,12 @@ static int wsdsi_open_device(struct devmodule* dev, const char* optv[]){
     if( load_error > 0 ) return fprintf( stderr, "failed to import %d functions from dynamic library \"%s\"\n", load_error, DSI_DYLIB_NAME( dllname ) );
 
 	// Create device
-	wsdsidev->h = DSI_Headset_New(NULL); CHECK
-	DSI_Headset_SetMessageCallback( wsdsidev->h, Message ); CHECK
-	DSI_Headset_SetVerbosity( wsdsidev->h, atoi(DEFAULT_VERBOSITY) ); CHECK
-	DSI_Headset_Connect( wsdsidev->h, wsdsidev->serialport ); CHECK
-	DSI_Headset_ChooseChannels( wsdsidev->h, wsdsilabels, NULL, 0 ); CHECK
-	fprintf( stderr, "%s\n", DSI_Headset_GetInfoString( wsdsidev->h ) ); CHECK
+	wsdsidev->h = DSI_Headset_New(NULL); 
+	//DSI_Headset_SetMessageCallback( wsdsidev->h, Message ); 
+	//DSI_Headset_SetVerbosity( wsdsidev->h, atoi(DEFAULT_VERBOSITY) ); 
+	DSI_Headset_Connect( wsdsidev->h, wsdsidev->serialport ); 
+	DSI_Headset_ChooseChannels( wsdsidev->h, wsdsilabels, NULL, 0 ); 
+	fprintf( stderr, "%s\n", DSI_Headset_GetInfoString( wsdsidev->h ) ); 
 	wsdsi_set_capability(wsdsidev, wsdsidev->serialport);
 
 	pthread_mutex_init(&(wsdsidev->acqlock), NULL);
@@ -225,7 +225,6 @@ int wsdsi_close_device(struct devmodule* dev)
 	DSI_Headset_StopDataAcquisition( wsdsidev->h );
 	DSI_Headset_Idle( wsdsidev->h, 1.0 );
 	DSI_Headset_Delete( wsdsidev->h );
-
 	wsdsidev->runacq = 0;
 
 	return 0;
@@ -266,8 +265,8 @@ static void wsdsi_fill_chinfo(const struct devmodule* dev, int stype,
 
 	info->isint = 0;
 	info->dtype = EGD_DOUBLE;
-	info->min.valdouble = -512.0 * wsdsi_scales[EGD_DOUBLE].valdouble;
-	info->max.valdouble = 511.0 * wsdsi_scales[EGD_DOUBLE].valdouble;
+	info->min.valdouble = -DBL_MAX; // * wsdsi_scales[EGD_DOUBLE].valdouble;
+	info->max.valdouble = DBL_MAX; // * wsdsi_scales[EGD_DOUBLE].valdouble;
 	info->label = wsdsilabel[ich];
 	info->unit = wsdsiunit;
 	info->transducter = wsdsitransducter;
