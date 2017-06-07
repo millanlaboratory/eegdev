@@ -74,6 +74,7 @@ struct gtec_options
 	double lp, hp, notch;
 	const char* devid;
 	unsigned int fs;
+	const char* commongndref;
 };
 
 struct filtparam
@@ -118,13 +119,14 @@ static const char trigger_transducter[] = "Triggers and Status";
 static const char trigger_prefiltering[] = "No filtering";
 static const char gtec_device_type[] = "gTec g.USBamp";
 
-enum {OPT_DEVID, OPT_HP, OPT_LP, OPT_NOTCH, OPT_FS, NUMOPT};
+enum {OPT_DEVID, OPT_HP, OPT_LP, OPT_NOTCH, OPT_FS, OPT_COMMON, NUMOPT};
 static const struct egdi_optname gtec_options[] = {
     [OPT_DEVID] = {.name = "deviceid", .defvalue = NULL},
     [OPT_HP] =    {.name = "highpass", .defvalue = "0.1"},
     [OPT_LP] =    {.name = "lowpass", .defvalue = "-1"},
     [OPT_NOTCH] = {.name = "notch", .defvalue = "50"},
     [OPT_FS] =    {.name = "samplerate", .defvalue = "512"},
+    [OPT_COMMON] ={.name = "commongndref", .defvalue = "1111"},
     [NUMOPT] =    {.name = NULL}
 };
 
@@ -345,8 +347,15 @@ int gtec_setup_conf(const char* devname, gt_usbamp_config* conf,
 
 	// Set all common reference and ground
 	for (i=0; i<GT_USBAMP_NUM_REFERENCE; i++) {
-		conf->common_ground[i] = GT_TRUE;
-		conf->common_reference[i] = GT_TRUE;
+		if ( gopt->commongndref[i] == '1') {
+			fprintf(stdout,"Group %d set to common ground and reference\n",i+1);
+			conf->common_ground[i] = GT_TRUE;
+			conf->common_reference[i] = GT_TRUE;
+		} else {
+			fprintf(stdout,"Group %d set to individual ground and reference\n",i+1);
+			conf->common_ground[i] = GT_FALSE;
+			conf->common_reference[i] = GT_FALSE;
+		}
 	}
 
 	// find best filters
@@ -423,6 +432,7 @@ void parse_gtec_options(const char* optv[], struct gtec_options* gopt)
 {
 	gopt->devid = optv[OPT_DEVID];
 	gopt->fs = atoi(optv[OPT_FS]);
+	gopt->commongndref = optv[OPT_COMMON];
 
 	if (!strcmp(optv[OPT_HP], "none"))
 		gopt->hp = 0.0;
