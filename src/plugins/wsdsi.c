@@ -54,8 +54,8 @@ struct wsdsi_eegdev {
 
 #define get_wsdsi(dev_p) ((struct wsdsi_eegdev*)(dev_p))
 
-#define DEFAULT_PORT	"/dev/ttyUSB0"
-//#define DEFAULT_PORT	"/dev/rfcomm40"
+//#define DEFAULT_PORT	"/dev/ttyUSB0"
+#define DEFAULT_PORT	"/dev/rfcomm1"
 #define DEFAULT_VERBOSITY	"0"
 #define DEFAULT_SAMPLEBATCH "1"
 #define DEFAULT_BUFFERAHEADSEC "0.0005"
