@@ -62,7 +62,8 @@ struct gtecnet_eegdev {
     char ScanInfo[10000];           //Allocate enough memory
     char* host_ip;
     char* local_ip;
-    	
+    char* montage;
+	
     int NchannelsALL;
     int NchannelsEEG;
     int NchannelsEXG;
@@ -96,6 +97,8 @@ struct gtecnet_eegdev {
 #define DEFAULT_LOCAL_PORT "50220"
 
 #define DEFAULT_SAMPLING_RATE "512"
+
+#define DEFAULT_MONTAGE "HIamp64" // Valid strings are HIamp64,Nautilus16,,Nautilus32,USBamp16
 
 #define DEFAULT_NOTCH "4"       // 512 Hz -> 48 - 52 Hz
 #define DEFAULT_BANDPASS "32"   // 512 Hz -> 0.01 - 100 Hz
@@ -146,12 +149,13 @@ static const char gtecnetunit_trigger[] = "Boolean";
 static const char gtecnettransducter_trigger[] = "Triggers and Status";
 static const int gtecnet_provided_stypes[] = {EGD_EEG};
 
-enum {OPT_HOSTIP, OPT_HOSTPORT, OPT_LOCALIP, OPT_LOCALPORT, OPT_SAMPLERATE, OPT_NOTCH, OPT_BANDPASS, OPT_USEDEFMAP, NUMOPT};
+enum {OPT_HOSTIP, OPT_HOSTPORT, OPT_LOCALIP, OPT_LOCALPORT, OPT_MONTAGE, OPT_SAMPLERATE, OPT_NOTCH, OPT_BANDPASS, OPT_USEDEFMAP, NUMOPT};
 static const struct egdi_optname gtecnet_options[] = {
     [OPT_HOSTIP] = {.name = "hostIP", .defvalue = DEFAULT_HOST_IP},
     [OPT_HOSTPORT] = {.name = "hostport", .defvalue = DEFAULT_HOST_PORT},
     [OPT_LOCALIP] = {.name = "localIP", .defvalue = DEFAULT_LOCAL_IP},
     [OPT_LOCALPORT] = {.name = "localport", .defvalue = DEFAULT_LOCAL_PORT},
+    [OPT_MONTAGE] = {.name = "montage", .defvalue = DEFAULT_MONTAGE},
     [OPT_SAMPLERATE] = {.name = "samplerate", .defvalue = DEFAULT_SAMPLING_RATE},
     [OPT_NOTCH] = {.name = "notch", .defvalue = DEFAULT_NOTCH},
     [OPT_BANDPASS] = {.name = "bandpass", .defvalue = DEFAULT_BANDPASS},
@@ -170,6 +174,7 @@ void parse_gtecnet_options(const char* optv[], struct devmodule* dev)
 
     tdev->local_ip = optv[OPT_LOCALIP];
     tdev->local_port = atoi(optv[OPT_LOCALPORT]);
+    tdev->montage = optv[OPT_MONTAGE];
 
     tdev->SamplingRate = atoi(optv[OPT_SAMPLERATE]);
     tdev->BPFilter = atoi(optv[OPT_BANDPASS]);
@@ -345,20 +350,45 @@ int init_data_com(struct devmodule* dev, const char* optv[])
 	// Open acquisition session
 	int OpenAcqSesOutput = gtecnal_OpenDAQSession(tdev->Transceiver, tdev->SessionID, tdev->ConnectedDevices, 1, 1,tdev->DeviceType,tdev->DeviceName);
 	
+	//// Read configuration (not used for now)
+        //char GetConfig[100000];
+	//int GetConfigurationOutput = gtecnal_GetConfiguration(tdev->Transceiver, tdev->SessionID, 1, GetConfig);
+
 	// Specify number and type of channels, hardcoded according to CNBI conventions
-	if(strcmp(tdev->DeviceType,"gUSBamp")==0){
+	if(strcmp(tdev->montage,"USBamp16")==0){
+	    if(strcmp(tdev->DeviceType,"gUSBamp") != 0){
+	        fprintf(stderr,"Montage incompatible with connected device, crashing!\n");
+	        exit(EXIT_FAILURE);
+	    }
 	    tdev->NchannelsALL = 17;
 	    tdev->NchannelsEEG = 16;
 	    tdev->NchannelsEXG = 0;
 	    tdev->NchannelsTRIG = 1;
-	}else if(strcmp(tdev->DeviceType,"gHIamp")==0){
+	}else if(strcmp(tdev->montage,"HIamp64")==0){
+	    if(strcmp(tdev->DeviceType,"gHIamp") != 0){
+	        fprintf(stderr,"Montage incompatible with connected device, crashing!\n");
+	        exit(EXIT_FAILURE);
+	    }
 	    tdev->NchannelsALL = 81;
 	    tdev->NchannelsEEG = 64;
 	    tdev->NchannelsEXG = 16;
 	    tdev->NchannelsTRIG = 1;
-	}else if(strcmp(tdev->DeviceType,"gNautilus")==0){
+	}else if(strcmp(tdev->montage,"Nautilus32")==0){
+	    if(strcmp(tdev->DeviceType,"gNautilus") != 0){
+	        fprintf(stderr,"Montage incompatible with connected device, crashing!\n");
+	        exit(EXIT_FAILURE);
+	    }
 	    tdev->NchannelsALL = 33;
 	    tdev->NchannelsEEG = 32;
+	    tdev->NchannelsEXG = 0;
+	    tdev->NchannelsTRIG = 1;
+	}else if(strcmp(tdev->montage,"Nautilus16")==0){
+	    if(strcmp(tdev->DeviceType,"gNautilus") != 0){
+	        fprintf(stderr,"Montage incompatible with connected device, crashing!\n");
+	        exit(EXIT_FAILURE);
+	    }
+	    tdev->NchannelsALL = 17;
+	    tdev->NchannelsEEG = 16;
 	    tdev->NchannelsEXG = 0;
 	    tdev->NchannelsTRIG = 1;
 	}else{
@@ -375,7 +405,7 @@ int init_data_com(struct devmodule* dev, const char* optv[])
             gtecnal_SetDefaultgHIamp((gHIampConfig*)tdev->devconf,tdev->SamplingRate,tdev->BPFilter,tdev->notchFilter);
 	}else if(strcmp(tdev->DeviceType,"gNautilus")==0){
             tdev->devconf = (gNautilusConfig*)malloc(sizeof(gNautilusConfig)); // Careful, must be freed in the end
-            gtecnal_SetDefaultgNautilus((gNautilusConfig*)tdev->devconf,tdev->SamplingRate);
+            gtecnal_SetDefaultgNautilus((gNautilusConfig*)tdev->devconf,tdev->NchannelsEEG, tdev->SamplingRate,tdev->BPFilter,tdev->notchFilter);
 	}else{
 	    fprintf(stderr,"Unkown, unsupported device, crashing!\n");
 	    exit(EXIT_FAILURE);
@@ -387,8 +417,6 @@ int init_data_com(struct devmodule* dev, const char* optv[])
 	if (ConfDevOutput != 0)
             exit(EXIT_FAILURE); /* indicate failure.*/
 
-        char GetConfig[100000];
-	int GetConfigurationOutput = gtecnal_GetConfiguration(tdev->Transceiver, tdev->SessionID, 1, GetConfig);
 	
         // Get data info
 	int foundChannelsALL = 0;
@@ -481,12 +509,21 @@ static void gtecnet_fill_chinfo(const struct devmodule* dev, int stype,
 		if(stype == EGD_TRIGGER)
 		    info->label = gtecnetlabelHIamp[ich + tdev->NchannelsEEG + tdev->NchannelsEXG];
 	    }else if(strcmp(tdev->DeviceType,"gNautilus")==0){
-		if(stype == EGD_EEG)
-		    info->label = gtecnetlabelNautilus[ich];
-		if(stype == EGD_SENSOR)
-		    info->label = gtecnetlabelNautilus[ich + tdev->NchannelsEEG];
-		if(stype == EGD_TRIGGER)
-		    info->label = gtecnetlabelNautilus[ich + tdev->NchannelsEEG + tdev->NchannelsEXG];
+		if(strcmp(tdev->montage,"Nautilus32")==0){
+		    if(stype == EGD_EEG)
+			info->label = gtecnetlabelNautilus[ich];
+		    if(stype == EGD_SENSOR)
+			info->label = gtecnetlabelNautilus[ich + tdev->NchannelsEEG];
+		    if(stype == EGD_TRIGGER)
+			info->label = gtecnetlabelNautilus[ich + tdev->NchannelsEEG + tdev->NchannelsEXG];
+		}else{
+		    if(stype == EGD_EEG)
+			info->label = gtecnetlabelUSBamp[ich];
+		    if(stype == EGD_SENSOR)
+			info->label = gtecnetlabelUSBamp[ich + tdev->NchannelsEEG];
+		    if(stype == EGD_TRIGGER)
+			info->label = gtecnetlabelUSBamp[ich + tdev->NchannelsEEG + tdev->NchannelsEXG];
+		}
 	    }else{
 		info->label = gtecnetlabelGen[ich];
 	    }
