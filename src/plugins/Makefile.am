@@ -41,6 +41,13 @@ endif
 barv_la_SOURCES = barv.c RecorderRDA.h device-helper.h device-helper.c
 barv_la_LIBADD = $(BARV_LIBS) $(GNULIB) $(LIBSOCKET) $(GETADDRINFO_LIB)
 
+if NEURONE_SUPPORT
+pkglib_LTLIBRARIES += neurone.la
+endif
+neurone_la_SOURCES = neurone.c device-helper.h device-helper.c
+neurone_la_LIBADD = $(BARV_LIBS) $(GNULIB) $(LIBSOCKET) $(GETADDRINFO_LIB)
+
+
 if BBT_SUPPORT
 pkglib_LTLIBRARIES += bbt.la
 endif

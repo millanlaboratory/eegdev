@@ -163,8 +163,8 @@ LIBS=$save_LIBS
 # BrainProducts RDA (Recorder/RecView) support
 save_LIBS=$LIBS
 AC_ARG_WITH([barv], AC_HELP_STRING([--with-barv],
-	      [Support BrainProducts RDA (Recorder/RecView) backend @<:@default=check@:>@]),
-	    [], [with_barv=check])
+          [Support BrainProducts RDA (Recorder/RecView) backend @<:@default=check@:>@]),
+        [], [with_barv=check])
 AS_IF([test "x$with_barv" != xno],
     [AC_SEARCH_LIBS([pthread_create], [pthread], [barv_support=yes],
         [barv_support=no; if test "x$with_barv" != xcheck; then
@@ -173,6 +173,21 @@ AS_IF([test "x$with_barv" != xno],
 AM_CONDITIONAL([BARV_SUPPORT], [test "x$barv_support" = xyes])
 AC_SUBST([BARV_LIBS], "$LIBS")
 LIBS=$save_LIBS
+
+# Neurone support
+save_LIBS=$LIBS
+AC_ARG_WITH([neurone], AC_HELP_STRING([--with-neurone],
+          [Support BrainProducts RDA (Recorder/RecView) backend @<:@default=check@:>@]),
+        [], [with_neurone=check])
+AS_IF([test "x$with_neurone" != xno],
+    [AC_SEARCH_LIBS([pthread_create], [pthread], [neurone_support=yes],
+        [neurone_support=no; if test "x$with_neurone" != xcheck; then
+             AC_MSG_FAILURE([the pthread library is required for BrainProducts RDA (Recorder/RecView) support])
+         fi])], [neurone_support=no])
+AM_CONDITIONAL([NEURONE_SUPPORT], [test "x$neurone_support" = xyes])
+AC_SUBST([NEURONE_LIBS], "$LIBS")
+LIBS=$save_LIBS
+
 
 # BBT support
 save_LIBS=$LIBS
@@ -299,6 +314,7 @@ Configuration summary
     Neurosky support : $neurosky_support
     TobiIA support   : $tia_support
     BARV support     : $barv_support
+    NeurOne support  : $neurone_support
     BBT support	     : $bbt_support
     gTecNet support  : $gtecnet_support
     LSL support      : $lsl_support
