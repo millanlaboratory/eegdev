@@ -45,7 +45,7 @@ if NEURONE_SUPPORT
 pkglib_LTLIBRARIES += neurone.la
 endif
 neurone_la_SOURCES = neurone.c device-helper.h device-helper.c
-neurone_la_LIBADD = $(BARV_LIBS) $(GNULIB) $(LIBSOCKET) $(GETADDRINFO_LIB)
+neurone_la_LIBADD = $(NEURONE_LIBS) $(GNULIB) $(LIBSOCKET) $(GETADDRINFO_LIB)
 
 
 if BBT_SUPPORT
