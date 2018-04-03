@@ -206,6 +206,7 @@ static const int channel_idx[NUM_CHANNELS_TOTAL] = {
 	80
 };
 
+
 static
 const struct egdi_signal_info neurone_siginfo[2] = {
 	{
@@ -220,6 +221,21 @@ const struct egdi_signal_info neurone_siginfo[2] = {
 		.max = {.valint32_t = 8388608}
 	}
 };
+
+// static
+// const struct egdi_signal_info neurone_siginfo[2] = {
+// 	{
+// 		.unit = "uV", .transducer = "Active electrode Float",
+// 		.isint = 0, .bsc = 0, .dtype = EGD_DOUBLE,
+// 		.mmtype = EGD_DOUBLE, .min = {.valdouble = -262144.0},
+// 		.max = {.valdouble = 262143.96875}
+// 	}, {
+// 		.unit = "uV", .transducer = "Triggers and Status",
+// 		.isint = 1, .bsc = 0, .dtype = EGD_INT32,
+// 		.mmtype = EGD_INT32, .min = {.valint32_t = -8388608},
+// 		.max = {.valint32_t = 8388608}
+// 	}
+// };
 
 
 enum {SR_PARAM, PORT, NUMOPT};
@@ -273,13 +289,13 @@ void* neurone_read_fn(void *data)
 	const struct core_interface* restrict ci = &tdev->dev.ci;
 
 
-	int length_data_float;
+	int length_data_double;
 	float* dataDst;
 	float* auxDst;
 
 	union device_buffer db;
 	struct data_neurone_char *data_pckg;
-	char message[6000];
+	char message[9000];
 
 	int size;
 	int b, ch;
@@ -318,8 +334,8 @@ void* neurone_read_fn(void *data)
 			BLOCK_SIZE = db.i;
 			printf("Estimated Block Size: %d\n", BLOCK_SIZE);
 
-			length_data_float = (NUM_CHANNELS_TOTAL) * BLOCK_SIZE * sizeof(float);
-			dataDst = malloc(length_data_float);
+			length_data_double = (NUM_CHANNELS_TOTAL) * BLOCK_SIZE * sizeof(float);
+			dataDst = malloc(length_data_double);
 
 			for (ULONG i = 0; i < nChannels; i++)
 			{
@@ -375,15 +391,17 @@ void* neurone_read_fn(void *data)
 					db.c[2] = data_pckg->Samples[0 + idx_packg * 3];
 					db.c[3] = 0;
 					// This is the trigger channel
-					if (ch==NUM_CHANNELS_TOTAL) {
+					if ((ch+1)==NUM_CHANNELS_TOTAL) {
 						auxDst[b*NUM_CHANNELS_TOTAL+channel_idx[ch]] = ((int32_t) db.i);
+						// if (((int32_t) db.i) > 0)
+						// printf("trigger value %d\n", ((int32_t) db.i));
 					} else {
 						auxDst[b*NUM_CHANNELS_TOTAL+channel_idx[ch]] = ((float) db.i) / 10.0;
 					}
 					idx_packg++;
 				}
 			}
-			ci->update_ringbuffer(&(tdev->dev), dataDst, length_data_float);
+			ci->update_ringbuffer(&(tdev->dev), dataDst, length_data_double);
 		}
 
 		
@@ -577,6 +595,16 @@ void neurone_fill_chinfo(const struct devmodule* dev, int stype,
 		info->unit = analog_unit;
 		info->transducter = analog_transducter;
 		info->prefiltering = "Unknown";
+
+		// info->isint = 0;
+		// info->dtype = EGD_DOUBLE;
+		// info->min.valdouble = -262144.0;
+		// info->max.valdouble = 262143.96875;
+		// info->unit = analog_unit;
+		// info->transducter = analog_transducter;
+		// info->prefiltering = "Unknown";
+
+
 	} else {
 		info->label = "triggers";
 		info->isint = 1;
