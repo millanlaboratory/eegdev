@@ -367,7 +367,7 @@ void* neurone_read_fn(void *data)
 			tdev->chmap[nChannels].label = trigLbl;
 
 			tdev->chmap[nChannels].stype = EGD_TRIGGER;
-			siginf[nChannels] = neurone_siginfo[1];
+			siginf[nChannels] = neurone_siginfo[0];
 			siginf[nChannels].scale = 1.0;
 			tdev->chmap[nChannels].si = &siginf[nChannels];
 
@@ -392,9 +392,7 @@ void* neurone_read_fn(void *data)
 					db.c[3] = 0;
 					// This is the trigger channel
 					if ((ch+1)==NUM_CHANNELS_TOTAL) {
-						auxDst[b*NUM_CHANNELS_TOTAL+channel_idx[ch]] = ((int32_t) db.i);
-						// if (((int32_t) db.i) > 0)
-						// printf("trigger value %d\n", ((int32_t) db.i));
+						auxDst[b*NUM_CHANNELS_TOTAL+channel_idx[ch]] = (int) db.c[1] / 1.0;
 					} else {
 						auxDst[b*NUM_CHANNELS_TOTAL+channel_idx[ch]] = ((float) db.i) / 10.0;
 					}
