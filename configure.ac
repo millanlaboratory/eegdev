@@ -23,14 +23,12 @@ AC_CONFIG_HEADERS([config/config.h])
 AM_INIT_AUTOMAKE([no-dist-gzip dist-bzip2 color-tests subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
-
 AC_CANONICAL_HOST
 AC_CANONICAL_BUILD
 
 # Check for programs
 AC_PROG_CC_C99
 gl_EARLY
-AM_PROG_CC_C_O
 LT_INIT([win32-dll disable-static])
 LT_SYS_MODULE_EXT
 AC_SUBST(LIBTOOL_DEPS)
@@ -38,7 +36,7 @@ AC_CHECK_PROG(HAS_FLEX,flex,yes,no)
 AC_CHECK_PROG(HAS_BISON,bison,yes,no)
 gl_INIT
 
-AC_C_BIGENDIAN
+#AC_C_BIGENDIAN
 AC_DEF_API_EXPORT_ATTRS
 
 # Test for the correct way to set CLOEXEC to file descriptors
@@ -238,7 +236,7 @@ AC_ARG_WITH([wsdsi], AC_HELP_STRING([--with-wsdsi],
 AS_IF([test "x$with_wsdsi" != xno],
       AC_SEARCH_LIBS([DSI_Headset_Connect], [dsi], [wsdsi_support=yes],
         [wsdsi_support=no; if test "x$with_wsdsi" != xcheck; then
-             AC_MSG_FAILURE([DSI library required for arduino support])
+             AC_MSG_FAILURE([DSI library required for Wearable Sensing DSI-24 support])
          fi]), [wsdsi_support=no])
 AM_CONDITIONAL([WSDSI_SUPPORT], [test "x$wsdsi_support" = xyes])
 AC_SUBST([WSDSI_LIBS], "$LIBS")
@@ -259,9 +257,27 @@ AS_IF([test "x$with_q20" != xno],
         [q20_support=no; if test "x$with_q20" != xcheck; then
              AC_MSG_FAILURE([libdl library required for q20 support])
          fi]), [q20_support=no])
-
 AM_CONDITIONAL([Q20_SUPPORT], [test "x$q20_support" = xyes])
 AC_SUBST([Q20_LIBS], "$LIBS")
+LIBS=$save_LIBS
+
+# Antneuro eego support
+save_LIBS=$LIBS
+AC_ARG_WITH([eego], AC_HELP_STRING([--with-eego],
+                    [Support for Antneuro eego backend @<:@default=no@:>@]),
+        [], [with_eego=no])
+AS_IF([test "x$with_eego" != xno],
+      AC_SEARCH_LIBS([eemagine_sdk_init], [eego-SDK], [eego_support=yes],
+        [eego_support=no; if test "x$with_eego" != xcheck; then
+             AC_MSG_FAILURE([eego-SDK library required for Antneuro eego support])
+         fi]), [eego_support=no])
+AS_IF([test "x$with_eego" != xno],
+      AC_SEARCH_LIBS([dlopen], [dl], [eego_support=yes],
+        [eego_support=no; if test "x$with_eego" != xcheck; then
+             AC_MSG_FAILURE([libdl library required for eego support])
+         fi]), [eego_support=no])
+AM_CONDITIONAL([EEGO_SUPPORT], [test "x$eego_support" = xyes])
+AC_SUBST([EEGO_LIBS], "$LIBS")
 LIBS=$save_LIBS
 
 
@@ -280,11 +296,11 @@ AH_BOTTOM([#endif /*CONFIG_H*/])
 
 AC_CONFIG_FILES([Makefile lib/Makefile gnulib-local/Makefile
                  src/core/Makefile src/core/eegdev.pc
-		 src/plugins/Makefile
-                 tests/Makefile tests/fakelibs/Makefile
-		 doc/Makefile doc/egd_open.3
-		 doc/examples/Makefile
-		 doc/examples/library-usage/Makefile])
+		src/plugins/Makefile 
+        tests/Makefile tests/fakelibs/Makefile
+		doc/Makefile doc/egd_open.3
+		doc/examples/Makefile
+		doc/examples/library-usage/Makefile])
 AC_OUTPUT
 
 echo "
@@ -305,4 +321,5 @@ Configuration summary
     Arduino support  : $arduino_support
     Wearable Sensing DSI support  : $wsdsi_support
     Cognionics Quick-20 support  : $q20_support
+    Antneuro eego support  : $eego_support
 "
