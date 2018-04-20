@@ -51,10 +51,10 @@ struct eego_eegdev {
 #define SYNC 0xAA
 
 #define DEFAULT_NCH_EEG "64"
-#define DEFAULT_NCH_EXG "2"
+#define DEFAULT_NCH_EXG "1"
 #define DEFAULT_NCH_TRIG "1"
 #define DEFAULT_SAMPLING_FREQ "512"
-#define DEFAULT_DEVICE_TYPE "Antneuro eego"
+#define DEFAULT_DEVICE_TYPE "Antneuro"
 #define DEFAULT_DEVICE_ID "N/A"
 
 static label4_t eegolabel64[] = {
@@ -90,8 +90,8 @@ static const char sensorlabel[][8] = {
     "sens19", "sens20", "sens21", "sens22", "sens23", "sens24"};
 
 static const char trigglabel[] = "Status";
-static const char eego_device_type[] = "Antneuro eego";
-static const char eego_device_id[] = "N/A";
+static const char eego_device_type[] = "Antneuro";
+static const char eego_device_id[] = "eego";
 static const char* eegounit[] = {"uV", "Boolean"};
 static const char* eegotransducter[] = {"Active electrode",
                                         "Trigger and Status"};
@@ -143,23 +143,24 @@ static void* eego_read_fn(void* arg) {
   struct eego_eegdev* eegodev = arg;
   const struct core_interface* restrict ci = &eegodev->dev.ci;
 
-  int runacq, buffer_status, bytes_to_allocate, nb_batch, samples_in_bytes;
+  int runacq, buffer_status, bytes_to_allocate, nb_sample, nb_batch, samples_in_bytes;
   double* buffer;
+  samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double);
 
   while (1) {
-    sleep(0.1);
+    usleep(100000);
     runacq = eegodev->runacq;
     if (!runacq) break;
 
     bytes_to_allocate = eemagine_sdk_prefetch(eegodev->streams_id);
     buffer = malloc(bytes_to_allocate);
+    nb_sample = bytes_to_allocate / sizeof(double);
     buffer_status = eemagine_sdk_get_data(eegodev->streams_id, buffer, bytes_to_allocate);
-    nb_batch = bytes_to_allocate / (sizeof(double) * eegodev->stream_nb_channels);
-    samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double);
-
+    nb_batch = nb_sample / eegodev->stream_nb_channels;
 
     for (unsigned int j = 0; j < nb_batch; ++j) {
       // Update the eegdev structure with the new data
+      printf("%f\n", buffer[(j * eegodev->stream_nb_channels) + 64] * 1000);
       if (ci->update_ringbuffer(&(eegodev->dev),
                                 &buffer[j * eegodev->stream_nb_channels],
                                 samples_in_bytes))
@@ -182,8 +183,8 @@ static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
 
   for (int i = 0; i < bip_mask_size; ++i)
   {
-    if (i < atoi(optv[2]) )
-    //if (i == 12)
+    //if (i < atoi(optv[2]) )
+    if (i == 7)
     {
       bip_mask_string[i] = '1';  
     } else {
@@ -192,6 +193,7 @@ static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
   }
 
   bip_mask_string[bip_mask_size] = '\0';
+  printf("%s\n", bip_mask_string);
 
   unsigned long long bip_mask = (unsigned long long)strtol(bip_mask_string, NULL, 2);
   free(bip_mask_string);
@@ -208,6 +210,7 @@ static int eego_open_device(struct devmodule* dev, const char* optv[]) {
   double bipolar_range = 4;
   unsigned long long ref_mask;
   unsigned long long bip_mask = compute_bip_mask(eegodev, optv);
+  //unsigned long long bip_mask = 0xFFFFFF;
   int bytes_to_allocate;
 
   eemagine_sdk_amplifier_info* amplifier_info_tmp;
@@ -246,6 +249,7 @@ static int eego_open_device(struct devmodule* dev, const char* optv[]) {
 
   eegodev->stream_nb_channels =
       eemagine_sdk_get_stream_channel_count(eegodev->streams_id);
+      printf("%d\n", eegodev->stream_nb_channels);
 
   bytes_to_allocate =
       sizeof(eemagine_sdk_channel_info) * eegodev->stream_nb_channels;

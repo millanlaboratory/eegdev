@@ -211,11 +211,17 @@ static
 int wsdsi_close_device(struct devmodule* dev)
 {
 	struct wsdsi_eegdev* wsdsidev = get_wsdsi(dev);
+	status = pthread_mutex_lock(&eegodev->acqlock);
+    wsdsidev->runacq = 0;
+    status = pthread_mutex_unlock(&eegodev->acqlock);
+    
 	DSI_Headset_SetSampleCallback( wsdsidev->h, NULL, NULL );
 	DSI_Headset_StopDataAcquisition( wsdsidev->h );
 	DSI_Headset_Idle( wsdsidev->h, 1.0 );
 	DSI_Headset_Delete( wsdsidev->h );
-	wsdsidev->runacq = 0;
+
+	pthread_join(wsdsidev->thread_id, NULL);
+    pthread_mutex_destroy(&wsdsi->acqlock);
 
 	return 0;
 }
