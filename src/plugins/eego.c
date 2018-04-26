@@ -38,6 +38,8 @@ struct eego_eegdev {
   int NUM_TRI_CH;
   int NUM_SAMPLE_COUNTER_CH;
   int NCH;
+  
+  unsigned int offset[EGD_NUM_STYPE];
 
   pthread_t thread_id;
   pthread_mutex_t acqlock;
@@ -51,7 +53,7 @@ struct eego_eegdev {
 #define SYNC 0xAA
 
 #define DEFAULT_NCH_EEG "64"
-#define DEFAULT_NCH_EXG "1"
+#define DEFAULT_NCH_EXG "0"
 #define DEFAULT_NCH_TRIG "1"
 #define DEFAULT_SAMPLING_FREQ "512"
 #define DEFAULT_DEVICE_TYPE "Antneuro"
@@ -101,7 +103,8 @@ static const union gval eego_scales[EGD_NUM_DTYPE] = {
     [EGD_FLOAT] = {.valfloat = 1000000.0f},  // in uV
     [EGD_DOUBLE] = {.valdouble = 1000000}    // in uV
 };
-static const int eego_provided_stypes[] = {EGD_EEG, EGD_SENSOR, EGD_TRIGGER};
+
+//static const int eego_provided_stypes[] = {EGD_EEG, EGD_SENSOR, EGD_TRIGGER};
 
 enum {
   OPT_SR,
@@ -122,6 +125,91 @@ static const struct egdi_optname eego_options[] = {
     [OPT_DEVICE_ID] = {.name = "DEVICE_ID", .defvalue = DEFAULT_DEVICE_ID},
     [NUMOPT] = {.name = NULL}};
 
+void check_status(const char *msg, int s) {
+  switch (s) {
+  case EEMAGINE_SDK_NOT_CONNECTED:
+    fprintf(stderr, "%s: status is not connected\n", msg);
+    break;
+  case EEMAGINE_SDK_ALREADY_EXISTS:
+    fprintf(stderr, "%s: status is already exists\n", msg);
+    break;
+  case EEMAGINE_SDK_NOT_FOUND:
+    fprintf(stderr, "%s: status is not found\n", msg);
+    break;
+  case EEMAGINE_SDK_INCORRECT_VALUE:
+    fprintf(stderr, "%s: status is incorrect value\n", msg);
+    break;
+  case EEMAGINE_SDK_INTERNAL_ERROR:
+    fprintf(stderr, "%s: status is internal error\n", msg);
+    break;
+  case EEMAGINE_SDK_UNKNOWN:
+    fprintf(stderr, "%s: status is unknown\n", msg);
+    break;
+  default:
+    printf("%s: status ok\n", msg);
+    break;
+  }
+}
+
+static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
+                                           const char* optv[]) {
+  // HARD CODED --> TO CHANGE!!!
+  // For now required that the user use the first n EXG channels. He cannot connect to any channels.
+  unsigned long long bip_mask;
+
+  if (atoi(optv[2]) == 1)
+    bip_mask = 0x000001;
+  else if (atoi(optv[2]) == 2)
+    bip_mask = 0x000003;
+  else if (atoi(optv[2]) == 3)
+    bip_mask = 0x000007;
+  else if (atoi(optv[2]) == 4)
+    bip_mask = 0x00000F;
+  else if (atoi(optv[2]) == 5)
+    bip_mask = 0x00001F;
+  else if (atoi(optv[2]) == 6)
+    bip_mask = 0x00003F;
+  else if (atoi(optv[2]) == 7)
+    bip_mask = 0x00007F;
+  else if (atoi(optv[2]) == 8)
+    bip_mask = 0x0000FF;
+  else if (atoi(optv[2]) == 9)
+    bip_mask = 0x0001FF;
+  else if (atoi(optv[2]) == 10)
+    bip_mask = 0x0003FF;
+  else if (atoi(optv[2]) == 11)
+    bip_mask = 0x0007FF;
+  else if (atoi(optv[2]) == 12)
+    bip_mask = 0x000FFF;
+  else if (atoi(optv[2]) == 13)
+    bip_mask = 0x001FFF;
+  else if (atoi(optv[2]) == 14)
+    bip_mask = 0x003FFF;
+  else if (atoi(optv[2]) == 15)
+    bip_mask = 0x007FFF;
+  else if (atoi(optv[2]) == 16)
+    bip_mask = 0x00FFFF;
+  else if (atoi(optv[2]) == 17)
+    bip_mask = 0x01FFFF;
+  else if (atoi(optv[2]) == 18)
+    bip_mask = 0x03FFFF;
+  else if (atoi(optv[2]) == 19)
+    bip_mask = 0x07FFFF;
+  else if (atoi(optv[2]) == 20)
+    bip_mask = 0x0FFFFF;
+  else if (atoi(optv[2]) == 21)
+    bip_mask = 0x1FFFFF;
+  else if (atoi(optv[2]) == 22)
+    bip_mask = 0x3FFFFF;
+  else if (atoi(optv[2]) == 23)
+    bip_mask = 0x7FFFFF;
+  else if (atoi(optv[2]) == 24)
+    bip_mask = 0xFFFFFF;
+
+  //bip_mask = 0x000040;
+  return bip_mask;
+}
+
 static int eego_set_capability(struct eego_eegdev* eegodev,
                                const char* optv[]) {
   struct systemcap cap = {
@@ -134,8 +222,12 @@ static int eego_set_capability(struct eego_eegdev* eegodev,
   };
   struct devmodule* dev = &eegodev->dev;
 
+  eegodev->offset[EGD_EEG] = 0;
+  eegodev->offset[EGD_SENSOR] = (eegodev->NUM_EEG_CH) * sizeof(double);
+  eegodev->offset[EGD_TRIGGER] = eegodev->offset[EGD_SENSOR] + (eegodev->NUM_EXG_CH) * sizeof(double);
+
   dev->ci.set_cap(dev, &cap);
-  dev->ci.set_input_samlen(dev, eegodev->NCH * sizeof(double));
+  dev->ci.set_input_samlen(dev, (eegodev->NCH - 1) * sizeof(double));
   return 0;
 }
 
@@ -145,7 +237,7 @@ static void* eego_read_fn(void* arg) {
 
   int runacq, buffer_status, bytes_to_allocate, nb_sample, nb_batch, samples_in_bytes;
   double* buffer;
-  samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double);
+  samples_in_bytes = (eegodev->stream_nb_channels -1) * sizeof(double);
 
   while (1) {
     usleep(100000);
@@ -160,7 +252,7 @@ static void* eego_read_fn(void* arg) {
 
     for (unsigned int j = 0; j < nb_batch; ++j) {
       // Update the eegdev structure with the new data
-      printf("%f\n", buffer[(j * eegodev->stream_nb_channels) + 64] * 1000);
+      //printf("%f\n", buffer[(j * eegodev->stream_nb_channels) + 66] * 1000);
       if (ci->update_ringbuffer(&(eegodev->dev),
                                 &buffer[j * eegodev->stream_nb_channels],
                                 samples_in_bytes))
@@ -174,51 +266,24 @@ error:
   return NULL;
 }
 
-static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
-                                           const char* optv[]) {
-  int bip_mask_size = 24;
-  char* bip_mask_string;
-  
-  bip_mask_string = malloc(sizeof(char) * (bip_mask_size + 1));
-
-  for (int i = 0; i < bip_mask_size; ++i)
-  {
-    //if (i < atoi(optv[2]) )
-    if (i == 7)
-    {
-      bip_mask_string[i] = '1';  
-    } else {
-      bip_mask_string[i] = '0';
-    }
-  }
-
-  bip_mask_string[bip_mask_size] = '\0';
-  printf("%s\n", bip_mask_string);
-
-  unsigned long long bip_mask = (unsigned long long)strtol(bip_mask_string, NULL, 2);
-  free(bip_mask_string);
-  
-  return bip_mask;
-}
-
 
 static int eego_open_device(struct devmodule* dev, const char* optv[]) {
 
   struct eego_eegdev* eegodev = get_eego(dev);
 
-  double reference_range = 1;
-  double bipolar_range = 4;
-  unsigned long long ref_mask;
+  unsigned long long ref_mask = 0xFFFFFFFFFFFFFFFF;
   unsigned long long bip_mask = compute_bip_mask(eegodev, optv);
-  //unsigned long long bip_mask = 0xFFFFFF;
   int bytes_to_allocate;
 
   eemagine_sdk_amplifier_info* amplifier_info_tmp;
   amplifier_info_tmp = malloc(sizeof(eemagine_sdk_amplifier_info) * 2);
 
+  // Initialize the amplifiers
   eemagine_sdk_init();
   eegodev->amplifiers_nb =
       eemagine_sdk_get_amplifiers_info(amplifier_info_tmp, 2);
+  check_status("get amplifiers info", eegodev->amplifiers_nb);
+  printf("nb amplifier: %d\n", eegodev->amplifiers_nb);
 
   eegodev->NUM_EEG_CH = 0;
   eegodev->NUM_EXG_CH = 0;
@@ -226,39 +291,58 @@ static int eego_open_device(struct devmodule* dev, const char* optv[]) {
   eegodev->NUM_SAMPLE_COUNTER_CH = 0;
 
   if (eegodev->amplifiers_nb > 1) {
+    // If more than one amplifier, create a cascaded amplifier.
     int* amplifier_info_tmp_id;
     amplifier_info_tmp_id = malloc(sizeof(int) * eegodev->amplifiers_nb);
 
-    for (int i = 0; i < eegodev->amplifiers_nb; ++i)
+    for (int i = 0; i < eegodev->amplifiers_nb; ++i) {
       amplifier_info_tmp_id[i] = amplifier_info_tmp[i].id;
-
-    ref_mask = 0xffffffffffffffffffffffffffffffff;
+      printf("amp %i : %s\n", i, amplifier_info_tmp[i].serial);
+    }
     eegodev->amplifier_info.id = eemagine_sdk_create_cascaded_amplifier(
         amplifier_info_tmp_id, eegodev->amplifiers_nb);
+    check_status("create cascaded amplifier", eegodev->amplifier_info.id);
     free(amplifier_info_tmp_id);
 
   } else {
-    ref_mask = 0xffffffffffffffff;
     eegodev->amplifier_info = amplifier_info_tmp[0];
+    printf("amp : %s\n", eegodev->amplifier_info.serial);
   }
   free(amplifier_info_tmp);
 
-  eegodev->streams_id = eemagine_sdk_open_eeg_stream(
-      eegodev->amplifier_info.id, atoi(optv[0]), reference_range, bipolar_range,
-      ref_mask, bip_mask);
+  // Compute the ranges of the EEG electrodes(ref).
+  double reference_range[64];
+  check_status("get ref ranges",
+               eemagine_sdk_get_amplifier_reference_ranges_available(
+                   eegodev->amplifier_info.id, reference_range, 64));
+  // Compute the ranges of the bipolaires electrodes(bip).
+  double bipolar_range[64];
+  check_status("get bip ranges",
+               eemagine_sdk_get_amplifier_bipolar_ranges_available(
+                   eegodev->amplifier_info.id, bipolar_range, 64));
 
+  // Compute the masks defining the electrodes used here.
+  // Open the stream.
+  eegodev->streams_id = eemagine_sdk_open_eeg_stream(
+      eegodev->amplifier_info.id, atoi(optv[0]), reference_range[0], bipolar_range[0],
+      ref_mask, bip_mask);
+  check_status("open eeg stream", eegodev->streams_id);
+
+  // Compute the channels number.
   eegodev->stream_nb_channels =
       eemagine_sdk_get_stream_channel_count(eegodev->streams_id);
-      printf("%d\n", eegodev->stream_nb_channels);
+  check_status("get stream channel count", eegodev->stream_nb_channels);
 
+  // Compute the channels list.
   bytes_to_allocate =
       sizeof(eemagine_sdk_channel_info) * eegodev->stream_nb_channels;
-
   eemagine_sdk_channel_info* channel_info_array;
   channel_info_array = malloc(bytes_to_allocate);
   eemagine_sdk_get_stream_channel_list(eegodev->streams_id, channel_info_array,
                                        bytes_to_allocate);
+  printf("nb channels: %d\n", eegodev->stream_nb_channels);
 
+  // Compute the number of EEG, EXG, COUNT and TRIG channels 
   for (int j = 0; j < eegodev->stream_nb_channels; ++j) {
     switch (channel_info_array[j].type) {
       case EEMAGINE_SDK_CHANNEL_TYPE_REFERENCE:
@@ -275,10 +359,10 @@ static int eego_open_device(struct devmodule* dev, const char* optv[]) {
         break;
     }
   }
-  free(channel_info_array);
-
   eegodev->NCH = (eegodev->NUM_EEG_CH + eegodev->NUM_EXG_CH +
                   eegodev->NUM_TRI_CH + eegodev->NUM_SAMPLE_COUNTER_CH);
+
+  free(channel_info_array);
 
   eego_set_capability(eegodev, optv);
   pthread_mutex_init(&(eegodev->acqlock), NULL);
@@ -299,13 +383,13 @@ error:
 
 static int eego_close_device(struct devmodule* dev) {
   struct eego_eegdev* eegodev = get_eego(dev);
-  int status;
   
-  status = pthread_mutex_lock(&eegodev->acqlock);
+  pthread_mutex_lock(&eegodev->acqlock);
   eegodev->runacq = 0;
-  status = pthread_mutex_unlock(&eegodev->acqlock);
-  status = eemagine_sdk_close_stream(eegodev->streams_id);
-  status = eemagine_sdk_close_amplifier(eegodev->amplifier_info.id);
+  pthread_mutex_unlock(&eegodev->acqlock);
+  check_status("close stream: ", eemagine_sdk_close_stream(eegodev->streams_id));
+  check_status("close amplifier: ",eemagine_sdk_close_amplifier(eegodev->amplifier_info.id));
+
   pthread_join(eegodev->thread_id, NULL);
   pthread_mutex_destroy(&eegodev->acqlock);
   eemagine_sdk_exit();
@@ -316,13 +400,14 @@ static int eego_set_channel_groups(struct devmodule* dev, unsigned int ngrp,
                                    const struct grpconf* grp) {
   unsigned int i, stype;
   struct selected_channels* selch;
+  struct eego_eegdev* eegodev = get_eego(dev);
 
   if (!(selch = dev->ci.alloc_input_groups(dev, ngrp))) return -1;
 
   for (i = 0; i < ngrp; i++) {
     stype = grp[i].sensortype;
     // Set parameters of (eeg -> ringbuffer)
-    selch[i].in_offset = grp[i].index * sizeof(double);  // NO OFFSET COMPARED TO BIOSEMI --> to verify!
+    selch[i].in_offset = eegodev->offset[stype] + grp[i].index * sizeof(double);  // NO OFFSET COMPARED TO BIOSEMI --> to verify!
     selch[i].inlen = grp[i].nch * sizeof(double);
     selch[i].bsc = (stype == EGD_TRIGGER) ? 0 : 1;
     selch[i].typein = EGD_DOUBLE;
@@ -347,15 +432,15 @@ static void eego_fill_chinfo(const struct devmodule* dev, int stype,
     info->max.valdouble = DBL_MAX;   // * wsdsi_scales[EGD_DOUBLE].valdouble;
     if (eegodev->NUM_EEG_CH == 64) {
       info->label = (stype == EGD_EEG) ? eegolabel64[ich] : sensorlabel[ich];
-    } else {
+    } else if (eegodev->NUM_EEG_CH == 128) {
       info->label = (stype == EGD_EEG) ? eegolabel128[ich] : sensorlabel[ich];
     }
     t = 0;
   } else {
-    info->isint = 1;
-    info->dtype = EGD_INT32;
-    info->min.valint32_t = INT32_MIN;
-    info->max.valint32_t = INT32_MAX;
+    info->isint = 0;
+    info->dtype = EGD_DOUBLE;
+    info->min.valint32_t = -EGD_DOUBLE;
+    info->max.valint32_t = EGD_DOUBLE;
     info->label = trigglabel;
     t = 1;
   }
