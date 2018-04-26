@@ -59,6 +59,11 @@ struct eego_eegdev {
 #define DEFAULT_DEVICE_TYPE "Antneuro"
 #define DEFAULT_DEVICE_ID "N/A"
 
+static label4_t eegolabel32[] = {
+    "FP1", "FPZ", "FP2", "F7",  "F3",  "FZ",  "F4",  "F8",  "FC5", "FC1", "FC2",
+    "FC6", "M1",  "T7",  "C3",  "CZ",  "C4",  "T8",  "M2",  "CP5", "CP1", "CP2",
+    "CP6", "P7",  "P3",  "Pz",  "P4",  "P8",  "POZ", "O1",  "OZ",  "O2"};
+
 static label4_t eegolabel64[] = {
     "FP1", "FPZ", "FP2", "F7",  "F3",  "FZ",  "F4",  "F8",  "FC5", "FC1", "FC2",
     "FC6", "M1",  "T7",  "C3",  "CZ",  "C4",  "T8",  "M2",  "CP5", "CP1", "CP2",
@@ -98,13 +103,12 @@ static const char* eegounit[] = {"uV", "Boolean"};
 static const char* eegotransducter[] = {"Active electrode",
                                         "Trigger and Status"};
 
+
 static const union gval eego_scales[EGD_NUM_DTYPE] = {
     [EGD_INT32] = {.valint32_t = 1},
     [EGD_FLOAT] = {.valfloat = 1000000.0f},  // in uV
     [EGD_DOUBLE] = {.valdouble = 1000000}    // in uV
 };
-
-//static const int eego_provided_stypes[] = {EGD_EEG, EGD_SENSOR, EGD_TRIGGER};
 
 enum {
   OPT_SR,
@@ -125,6 +129,13 @@ static const struct egdi_optname eego_options[] = {
     [OPT_DEVICE_ID] = {.name = "DEVICE_ID", .defvalue = DEFAULT_DEVICE_ID},
     [NUMOPT] = {.name = NULL}};
 
+
+/**
+ * @brief      Checks the output status of the SDK functions and dumps.
+ *
+ * @param[in]  msg   The message to dumps (related to the called SDK function).
+ * @param[in]  s     The functions's status output.
+ */
 void check_status(const char *msg, int s) {
   switch (s) {
   case EEMAGINE_SDK_NOT_CONNECTED:
@@ -151,6 +162,22 @@ void check_status(const char *msg, int s) {
   }
 }
 
+
+/**
+ * @brief      Calculates the bipolar electrodes' mask required by the amplifier
+ *             to open a stream.
+ *
+ * @details    The mask is a hex format. It represents the binary array of the
+ *             required channels. The mask is defined according to the number of
+ *             bipolar channels requested by the user (optv[2]). For now, if the
+ *             user specifies X bip channels, he has to connect the first X
+ *             electrodes on the bipolar boxes.
+ *
+ * @param      eegodev  The eegodev
+ * @param      optv     The optv
+ *
+ * @return     The bip mask.
+ */
 static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
                                            const char* optv[]) {
   // HARD CODED --> TO CHANGE!!!
@@ -206,10 +233,141 @@ static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
   else if (atoi(optv[2]) == 24)
     bip_mask = 0xFFFFFF;
 
-  bip_mask = 0x000040;
   return bip_mask;
 }
 
+
+/**
+ * @brief      Initialize the amplifiers and assign to the attribute
+ *             amplifier_info of eegdev struct
+ *
+ * @param      eegodev  The eegodev.
+ */
+static void initialize_amplifiers(struct eego_eegdev* eegodev) {
+
+  eemagine_sdk_amplifier_info* amplifier_info_tmp;
+  amplifier_info_tmp = malloc(sizeof(eemagine_sdk_amplifier_info) * 2);
+
+  eemagine_sdk_init();
+  eegodev->amplifiers_nb =
+      eemagine_sdk_get_amplifiers_info(amplifier_info_tmp, 2);
+  check_status("get amplifiers info", eegodev->amplifiers_nb);
+  printf("nb amplifier: %d\n", eegodev->amplifiers_nb);
+
+  eegodev->NUM_EEG_CH = 0;
+  eegodev->NUM_EXG_CH = 0;
+  eegodev->NUM_TRI_CH = 0;
+  eegodev->NUM_SAMPLE_COUNTER_CH = 0;
+
+  // If two amplifiers connected, create a cascaded amplifier (for 128 channels)
+  if (eegodev->amplifiers_nb == 2) {
+    int* amplifier_info_tmp_id;
+    amplifier_info_tmp_id = malloc(sizeof(int) * eegodev->amplifiers_nb);
+
+    for (int i = 0; i < eegodev->amplifiers_nb; ++i) {  
+      amplifier_info_tmp_id[i] = amplifier_info_tmp[i].id;
+      printf("amp %i : %s\n", i, amplifier_info_tmp[i].serial);
+    }
+
+    eegodev->amplifier_info.id = eemagine_sdk_create_cascaded_amplifier(
+        amplifier_info_tmp_id, eegodev->amplifiers_nb);
+    check_status("create cascaded amplifier", eegodev->amplifier_info.id);
+    free(amplifier_info_tmp_id);
+  } 
+  // If only one amplifier is connected.
+  else {
+    eegodev->amplifier_info = amplifier_info_tmp[0];
+    printf("amp : %s\n", eegodev->amplifier_info.serial);
+  }
+  free(amplifier_info_tmp);
+  
+}
+
+
+/**
+ * @brief      Gets the reference electrodes' range.
+ *
+ * @param      eegodev  The eegodev.
+ *
+ * @return     The reference range.
+ */
+static double get_reference_range(struct eego_eegdev* eegodev) {
+  double reference_range[64];
+  check_status("get ref ranges",
+               eemagine_sdk_get_amplifier_reference_ranges_available(
+                   eegodev->amplifier_info.id, reference_range, 64));
+
+  return reference_range[0];
+}
+
+
+/**
+ * @brief      Gets the bipolar electrodes' range.
+ *
+ * @param      eegodev  The eegodev.
+ *
+ * @return     The bipolar range.
+ */
+static double get_bip_range(struct eego_eegdev* eegodev){
+  double bipolar_range[64];
+  check_status("get bip ranges",
+               eemagine_sdk_get_amplifier_bipolar_ranges_available(
+                   eegodev->amplifier_info.id, bipolar_range, 64));
+
+  return bipolar_range[0];
+}
+
+
+/**
+ * @brief      Gets the channel list from the opened stream.
+ *
+ * @details    The channels list of the stream can be different from the one of
+ *             the amplifier as the user can select channels of interest.
+ *
+ * @param      eegodev  The eegodev
+ */
+static void get_channel_list(struct eego_eegdev* eegodev) {
+
+  // gets the channels list.
+  int bytes_to_allocate =
+      sizeof(eemagine_sdk_channel_info) * eegodev->stream_nb_channels;
+  eemagine_sdk_channel_info* channel_info_array;
+  channel_info_array = malloc(bytes_to_allocate);
+  eemagine_sdk_get_stream_channel_list(eegodev->streams_id, channel_info_array,
+                                       bytes_to_allocate);
+  printf("nb channels: %d\n", eegodev->stream_nb_channels);
+
+  // Assign the number of EEG, EXG, COUNT and TRIG channels 
+  for (int j = 0; j < eegodev->stream_nb_channels; ++j) {
+    switch (channel_info_array[j].type) {
+      case EEMAGINE_SDK_CHANNEL_TYPE_REFERENCE:
+        eegodev->NUM_EEG_CH += 1;
+        break;
+      case EEMAGINE_SDK_CHANNEL_TYPE_BIPOLAR:
+        eegodev->NUM_EXG_CH += 1;
+        break;
+      case EEMAGINE_SDK_CHANNEL_TYPE_TRIGGER:
+        eegodev->NUM_TRI_CH += 1;
+        break;
+      case EEMAGINE_SDK_CHANNEL_TYPE_SAMPLE_COUNTER:
+        eegodev->NUM_SAMPLE_COUNTER_CH += 1;
+        break;
+    }
+  }
+  eegodev->NCH = (eegodev->NUM_EEG_CH + eegodev->NUM_EXG_CH +
+                  eegodev->NUM_TRI_CH + eegodev->NUM_SAMPLE_COUNTER_CH);
+
+  free(channel_info_array);  
+}
+
+/**
+ * @brief      Sets the cap's capabilities.
+ *
+ * @param      eegodev  The eegodev.
+ * @param      optv     The optv.
+ *
+ * @return     Always 0.
+ */
 static int eego_set_capability(struct eego_eegdev* eegodev,
                                const char* optv[]) {
   struct systemcap cap = {
@@ -231,6 +389,14 @@ static int eego_set_capability(struct eego_eegdev* eegodev,
   return 0;
 }
 
+
+/**
+ * @brief      Get the data and update the eegdev structure.
+ *
+ * @param      arg   A pointer on the eegodev structure.
+ *
+ * @return     Always NULL.
+ */
 static void* eego_read_fn(void* arg) {
   struct eego_eegdev* eegodev = arg;
   const struct core_interface* restrict ci = &eegodev->dev.ci;
@@ -252,7 +418,6 @@ static void* eego_read_fn(void* arg) {
 
     for (unsigned int j = 0; j < nb_batch; ++j) {
       // Update the eegdev structure with the new data
-      //printf("%f\n", buffer[(j * eegodev->stream_nb_channels) + 66] * 1000);
       if (ci->update_ringbuffer(&(eegodev->dev),
                                 &buffer[j * eegodev->stream_nb_channels],
                                 samples_in_bytes))
@@ -267,110 +432,49 @@ error:
 }
 
 
+/**
+ * @brief      Plugin's main
+ *
+ * @param      dev   A pointer on the devmodule structure.
+ * @param      optv  The optv.
+ *
+ * @return     0 if successful, -1 otherwise.
+ */
 static int eego_open_device(struct devmodule* dev, const char* optv[]) {
 
   struct eego_eegdev* eegodev = get_eego(dev);
 
   unsigned long long ref_mask = 0xFFFFFFFFFFFFFFFF;
   unsigned long long bip_mask = compute_bip_mask(eegodev, optv);
-  int bytes_to_allocate;
-
-  eemagine_sdk_amplifier_info* amplifier_info_tmp;
-  amplifier_info_tmp = malloc(sizeof(eemagine_sdk_amplifier_info) * 2);
 
   // Initialize the amplifiers
-  eemagine_sdk_init();
-  eegodev->amplifiers_nb =
-      eemagine_sdk_get_amplifiers_info(amplifier_info_tmp, 2);
-  check_status("get amplifiers info", eegodev->amplifiers_nb);
-  printf("nb amplifier: %d\n", eegodev->amplifiers_nb);
+  initialize_amplifiers(eegodev);
 
-  eegodev->NUM_EEG_CH = 0;
-  eegodev->NUM_EXG_CH = 0;
-  eegodev->NUM_TRI_CH = 0;
-  eegodev->NUM_SAMPLE_COUNTER_CH = 0;
+  // Get the electrodes' range.
+  double reference_range = get_reference_range(eegodev);
+  double bipolar_range = get_bip_range(eegodev);  
 
-  if (eegodev->amplifiers_nb > 1) {
-    // If more than one amplifier, create a cascaded amplifier.
-    int* amplifier_info_tmp_id;
-    amplifier_info_tmp_id = malloc(sizeof(int) * eegodev->amplifiers_nb);
-
-    for (int i = 0; i < eegodev->amplifiers_nb; ++i) {
-      amplifier_info_tmp_id[i] = amplifier_info_tmp[i].id;
-      printf("amp %i : %s\n", i, amplifier_info_tmp[i].serial);
-    }
-    eegodev->amplifier_info.id = eemagine_sdk_create_cascaded_amplifier(
-        amplifier_info_tmp_id, eegodev->amplifiers_nb);
-    check_status("create cascaded amplifier", eegodev->amplifier_info.id);
-    free(amplifier_info_tmp_id);
-
-  } else {
-    eegodev->amplifier_info = amplifier_info_tmp[0];
-    printf("amp : %s\n", eegodev->amplifier_info.serial);
-  }
-  free(amplifier_info_tmp);
-
-  // Compute the ranges of the EEG electrodes(ref).
-  double reference_range[64];
-  check_status("get ref ranges",
-               eemagine_sdk_get_amplifier_reference_ranges_available(
-                   eegodev->amplifier_info.id, reference_range, 64));
-  // Compute the ranges of the bipolaires electrodes(bip).
-  double bipolar_range[64];
-  check_status("get bip ranges",
-               eemagine_sdk_get_amplifier_bipolar_ranges_available(
-                   eegodev->amplifier_info.id, bipolar_range, 64));
-
-  // Compute the masks defining the electrodes used here.
   // Open the stream.
   eegodev->streams_id = eemagine_sdk_open_eeg_stream(
-      eegodev->amplifier_info.id, atoi(optv[0]), reference_range[0], bipolar_range[0],
+      eegodev->amplifier_info.id, atoi(optv[0]), reference_range, bipolar_range,
       ref_mask, bip_mask);
   check_status("open eeg stream", eegodev->streams_id);
 
-  // Compute the channels number.
+  // Get the channels number.
   eegodev->stream_nb_channels =
       eemagine_sdk_get_stream_channel_count(eegodev->streams_id);
   check_status("get stream channel count", eegodev->stream_nb_channels);
 
-  // Compute the channels list.
-  bytes_to_allocate =
-      sizeof(eemagine_sdk_channel_info) * eegodev->stream_nb_channels;
-  eemagine_sdk_channel_info* channel_info_array;
-  channel_info_array = malloc(bytes_to_allocate);
-  eemagine_sdk_get_stream_channel_list(eegodev->streams_id, channel_info_array,
-                                       bytes_to_allocate);
-  printf("nb channels: %d\n", eegodev->stream_nb_channels);
+  // Get channel list
+  get_channel_list(eegodev);
 
-  // Compute the number of EEG, EXG, COUNT and TRIG channels 
-  for (int j = 0; j < eegodev->stream_nb_channels; ++j) {
-    switch (channel_info_array[j].type) {
-      case EEMAGINE_SDK_CHANNEL_TYPE_REFERENCE:
-        eegodev->NUM_EEG_CH += 1;
-        break;
-      case EEMAGINE_SDK_CHANNEL_TYPE_BIPOLAR:
-        eegodev->NUM_EXG_CH += 1;
-        break;
-      case EEMAGINE_SDK_CHANNEL_TYPE_TRIGGER:
-        eegodev->NUM_TRI_CH += 1;
-        break;
-      case EEMAGINE_SDK_CHANNEL_TYPE_SAMPLE_COUNTER:
-        eegodev->NUM_SAMPLE_COUNTER_CH += 1;
-        break;
-    }
-  }
-  eegodev->NCH = (eegodev->NUM_EEG_CH + eegodev->NUM_EXG_CH +
-                  eegodev->NUM_TRI_CH + eegodev->NUM_SAMPLE_COUNTER_CH);
-
-  free(channel_info_array);
-
+  // Set capabilities
   eego_set_capability(eegodev, optv);
+
+  // Launch the data acquisition's thread.
   pthread_mutex_init(&(eegodev->acqlock), NULL);
-
   eegodev->runacq = 1;
-
   int ret;
-
   if ((ret =
            pthread_create(&(eegodev->thread_id), NULL, eego_read_fn, eegodev)))
     goto error;
@@ -381,6 +485,14 @@ error:
   return -1;
 }
 
+
+/**
+ * @brief      Close the communication with the device
+ *
+ * @param      dev   A pointer on the devmodule struct.
+ *
+ * @return     Always true
+ */
 static int eego_close_device(struct devmodule* dev) {
   struct eego_eegdev* eegodev = get_eego(dev);
   
@@ -396,6 +508,17 @@ static int eego_close_device(struct devmodule* dev) {
   return 0;
 }
 
+
+/**
+ * @brief      Set the channel groups parameters used by eegdev
+ *
+ * @param      dev   A pointer on the devmodule structure.
+ * @param[in]  ngrp  The groups' number.
+ * @param[in]  grp   The array of grpconf struct containing specific group's
+ *                   informations.
+ *
+ * @return     Always 0.
+ */
 static int eego_set_channel_groups(struct devmodule* dev, unsigned int ngrp,
                                    const struct grpconf* grp) {
   unsigned int i, stype;
@@ -420,6 +543,15 @@ static int eego_set_channel_groups(struct devmodule* dev, unsigned int ngrp,
   return 0;
 }
 
+
+/**
+ * @brief      Fill channel information for each groups
+ *
+ * @param[in]  dev    A pointer on the devmodule struct.
+ * @param[in]  stype  The group type.
+ * @param[in]  ich    The channel index.
+ * @param      info   The egd_chinfo to fill.
+ */
 static void eego_fill_chinfo(const struct devmodule* dev, int stype,
                              unsigned int ich, struct egd_chinfo* info) {
   int t;
