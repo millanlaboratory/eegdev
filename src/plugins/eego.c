@@ -53,7 +53,7 @@ struct eego_eegdev {
 #define SYNC 0xAA
 
 #define DEFAULT_NCH_EEG "64"
-#define DEFAULT_NCH_EXG "0"
+#define DEFAULT_NCH_EXG "1"
 #define DEFAULT_NCH_TRIG "1"
 #define DEFAULT_SAMPLING_FREQ "512"
 #define DEFAULT_DEVICE_TYPE "Antneuro"
@@ -206,7 +206,7 @@ static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
   else if (atoi(optv[2]) == 24)
     bip_mask = 0xFFFFFF;
 
-  //bip_mask = 0x000040;
+  bip_mask = 0x000040;
   return bip_mask;
 }
 
@@ -407,7 +407,7 @@ static int eego_set_channel_groups(struct devmodule* dev, unsigned int ngrp,
   for (i = 0; i < ngrp; i++) {
     stype = grp[i].sensortype;
     // Set parameters of (eeg -> ringbuffer)
-    selch[i].in_offset = eegodev->offset[stype] + grp[i].index * sizeof(double);  // NO OFFSET COMPARED TO BIOSEMI --> to verify!
+    selch[i].in_offset = eegodev->offset[stype] + grp[i].index * sizeof(double);
     selch[i].inlen = grp[i].nch * sizeof(double);
     selch[i].bsc = (stype == EGD_TRIGGER) ? 0 : 1;
     selch[i].typein = EGD_DOUBLE;
@@ -439,8 +439,8 @@ static void eego_fill_chinfo(const struct devmodule* dev, int stype,
   } else {
     info->isint = 0;
     info->dtype = EGD_DOUBLE;
-    info->min.valint32_t = -EGD_DOUBLE;
-    info->max.valint32_t = EGD_DOUBLE;
+    info->min.valdouble = -EGD_DOUBLE;
+    info->max.valdouble = EGD_DOUBLE;
     info->label = trigglabel;
     t = 1;
   }
