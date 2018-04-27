@@ -122,7 +122,7 @@ enum {
 static const struct egdi_optname eego_options[] = {
     [OPT_SR] = {.name = "SR", .defvalue = DEFAULT_SAMPLING_FREQ},
     [OPT_NCH_EEG] = {.name = "NCH_EEG", .defvalue = DEFAULT_NCH_EEG},
-    [OPT_NCH_SENSOR] = {.name = "NCH_SENSOR", .defvalue = DEFAULT_NCH_EXG},
+    [OPT_NCH_SENSOR] = {.name = "NCH_EXG", .defvalue = DEFAULT_NCH_EXG},
     [OPT_NCH_TRIG] = {.name = "NCH_TRIG", .defvalue = DEFAULT_NCH_TRIG},
     [OPT_DEVICE_TYPE] = {.name = "DEVICE_TYPE",
                          .defvalue = DEFAULT_DEVICE_TYPE},
@@ -238,8 +238,8 @@ static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
 
 
 /**
- * @brief      Initialize the amplifiers and assign to the attribute
- *             amplifier_info of eegdev struct
+ * @brief      Initialize the amplifier and assign it to the eegdev attribute
+ *             amplifier_info.
  *
  * @param      eegodev  The eegodev.
  */
@@ -560,13 +560,14 @@ static void eego_fill_chinfo(const struct devmodule* dev, int stype,
   if (stype != EGD_TRIGGER) {
     info->isint = 0;
     info->dtype = EGD_DOUBLE;
-    info->min.valdouble = -DBL_MAX;  // * wsdsi_scales[EGD_DOUBLE].valdouble;
-    info->max.valdouble = DBL_MAX;   // * wsdsi_scales[EGD_DOUBLE].valdouble;
-    if (eegodev->NUM_EEG_CH == 64) {
+    info->min.valdouble = -DBL_MAX;
+    info->max.valdouble = DBL_MAX;
+    if (eegodev->NUM_EEG_CH == 32)
+      info->label = (stype == EGD_EEG) ? eegolabel32[ich] : sensorlabel[ich];
+    else if (eegodev->NUM_EEG_CH == 64)
       info->label = (stype == EGD_EEG) ? eegolabel64[ich] : sensorlabel[ich];
-    } else if (eegodev->NUM_EEG_CH == 128) {
+    else if (eegodev->NUM_EEG_CH == 128)
       info->label = (stype == EGD_EEG) ? eegolabel128[ich] : sensorlabel[ich];
-    }
     t = 0;
   } else {
     info->isint = 0;
