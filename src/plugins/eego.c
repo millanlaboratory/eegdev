@@ -529,7 +529,7 @@ static void eego_fill_chinfo(const struct devmodule* dev, int stype,
     info->min.valdouble = -DBL_MAX;
     info->max.valdouble = DBL_MAX;
     if (eegodev->NUM_EEG_CH == 124)
-      info->label = (stype == EGD_EEG) ? eegolabel[ich] : sensorlabel[ich];
+      info->label = (stype == EGD_EEG) ? eegolabel[ich] : eegodev->sensorlabel[ich];
     else
       info->label = (stype == EGD_EEG) ? eegodev->eeglabel[ich] : eegodev->sensorlabel[ich];
     t = 0;
