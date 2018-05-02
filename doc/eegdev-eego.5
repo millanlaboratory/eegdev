@@ -1,0 +1,41 @@
+.\"Copyright 2012 (c) EPFL
+.TH EEGDEV-EEGO 5 2012 "EPFL" "EEGDEV library manual"
+.SH NAME
+eegdev-eego - eegdev backend for Antneuro eego hardware.
+.SH DESCRIPTION
+.LP
+The \fBeego\fP plugin implements the backend of the eegdev library for
+Antneuro eego hardware. It supports both \fB32\fP, \fB64\fP and \fB128\fP caps. It automatically detects the cap layout.
+
+.SH CONFIGURATION
+.LP
+This plugin supports several options. The default value will be used
+if none of the configuration files nor the configuration string (see
+\fBegd_open\fP(3)) specify the option.
+.TP
+.B SR
+The sampling rate can be set to \fB500\fP, \fB512\fP, \fB1000\fP, \fB1024\fP, \fB2000\fP, \fB2048\fP, \fB4000\fP, \fB4096\fP, \fB8000\fP, \fB8192\fP, \fB16000\fP, \fB16384\fP Hz. Default value is \fB512\fP Hz.
+.TP
+
+.B EEG_MASK
+The eeg mask is the hexadecimal representation of the binary mask defining what eeg electrodes to use. Default value is \fB0xFFFFFFFFFFFFFFFF\fP (use all the electrodes).
+
+For example, in case of a 32 caps, recording only the first 4 electrodes requires the binary mask: 0...011111 (first electrodes are on the right). The corresponging hexadecimal representation is 0xFFFFFFFF.  
+.TP
+
+.B BIP_MASK
+The bipolar mask is the hexadecimal representation of the binary mask defining what  bipolar electrodres to use. Default value is \fB0x000000\fP.
+.TP
+
+.SH FILES
+.IP "/etc/eegdev/eegdev.conf" 4
+.PD
+Shared configuration file.
+.IP "/etc/eegdev/biosemi.conf" 4
+.PD
+Configuration file loaded when the plugin is used. The settings specified
+here overrides the settings in the shared configuration file.
+.SH "SEE ALSO"
+.BR egd_open (3),
+.BR eegdev-options (5)
+
