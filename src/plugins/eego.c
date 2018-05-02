@@ -18,11 +18,11 @@
 #include <eegdev-pluginapi.h>
 #include <float.h>
 
-#include "wrapper.h"
+#include "eego_wrapper.h"
 
 #define EEGO_SDK_BIND_STATIC
 
-typedef const char label4_t[4];
+//typedef const char label4_t[4];
 typedef const char label8_t[8];
 
 struct eego_eegdev {
@@ -39,7 +39,10 @@ struct eego_eegdev {
   int NUM_SAMPLE_COUNTER_CH;
   int NCH;
   
+  unsigned long long ref_mask, bip_mask;
   unsigned int offset[EGD_NUM_STYPE];
+  char** eeglabel;
+  char** sensorlabel;
 
   pthread_t thread_id;
   pthread_mutex_t acqlock;
@@ -52,27 +55,13 @@ struct eego_eegdev {
 #define EXCODE 0x55
 #define SYNC 0xAA
 
-#define DEFAULT_NCH_EEG "64"
-#define DEFAULT_NCH_EXG "1"
-#define DEFAULT_NCH_TRIG "1"
 #define DEFAULT_SAMPLING_FREQ "512"
+#define DEFAULT_REF_MASK "0xFFFFFFFFFFFFFFFF"
+#define DEFAULT_BIP_MASK "0x000000"
 #define DEFAULT_DEVICE_TYPE "Antneuro"
 #define DEFAULT_DEVICE_ID "N/A"
 
-static label4_t eegolabel32[] = {
-    "FP1", "FPZ", "FP2", "F7",  "F3",  "FZ",  "F4",  "F8",  "FC5", "FC1", "FC2",
-    "FC6", "M1",  "T7",  "C3",  "CZ",  "C4",  "T8",  "M2",  "CP5", "CP1", "CP2",
-    "CP6", "P7",  "P3",  "Pz",  "P4",  "P8",  "POZ", "O1",  "OZ",  "O2"};
-
-static label4_t eegolabel64[] = {
-    "FP1", "FPZ", "FP2", "F7",  "F3",  "FZ",  "F4",  "F8",  "FC5", "FC1", "FC2",
-    "FC6", "M1",  "T7",  "C3",  "CZ",  "C4",  "T8",  "M2",  "CP5", "CP1", "CP2",
-    "CP6", "P7",  "P3",  "Pz",  "P4",  "P8",  "POZ", "O1",  "OZ",  "O2",  "AF7",
-    "AF3", "AF4", "AF8", "F5",  "F1",  "F2",  "F6",  "FC3", "FCZ", "FC4", "C5",
-    "C1",  "C2",  "C6",  "CP3", "CPZ", "CP4", "P5",  "P1",  "P2",  "P6",  "PO5",
-    "PO3", "PO4", "PO6", "FT7", "FT8", "TP7", "TP8", "PO7", "PO8"};
-
-static label8_t eegolabel128[] = {
+static const label8_t eegolabel[] = {
     "FP1",   "FPZ",    "FP2",   "F7",     "F3",    "FZ",     "F4",     "F8",
     "FC5",   "FC1",    "FC2",   "FC6",    "M1",    "T7",     "C3",     "CZ",
     "C4",    "T8",     "M2",    "CP5",    "CP1",   "CP2",    "CP6",    "P7",
@@ -112,20 +101,17 @@ static const union gval eego_scales[EGD_NUM_DTYPE] = {
 
 enum {
   OPT_SR,
-  OPT_NCH_EEG,
-  OPT_NCH_SENSOR,
-  OPT_NCH_TRIG,
+  OPT_REF_MASK,
+  OPT_BIP_MASK,
   OPT_DEVICE_TYPE,
   OPT_DEVICE_ID,
   NUMOPT
 };
 static const struct egdi_optname eego_options[] = {
     [OPT_SR] = {.name = "SR", .defvalue = DEFAULT_SAMPLING_FREQ},
-    [OPT_NCH_EEG] = {.name = "NCH_EEG", .defvalue = DEFAULT_NCH_EEG},
-    [OPT_NCH_SENSOR] = {.name = "NCH_EXG", .defvalue = DEFAULT_NCH_EXG},
-    [OPT_NCH_TRIG] = {.name = "NCH_TRIG", .defvalue = DEFAULT_NCH_TRIG},
-    [OPT_DEVICE_TYPE] = {.name = "DEVICE_TYPE",
-                         .defvalue = DEFAULT_DEVICE_TYPE},
+    [OPT_REF_MASK] = {.name = "EEG_MASK", .defvalue = DEFAULT_REF_MASK},
+    [OPT_BIP_MASK] = {.name = "BIP_MASK", .defvalue = DEFAULT_BIP_MASK},
+    [OPT_DEVICE_TYPE] = {.name = "DEVICE_TYPE", .defvalue = DEFAULT_DEVICE_TYPE},
     [OPT_DEVICE_ID] = {.name = "DEVICE_ID", .defvalue = DEFAULT_DEVICE_ID},
     [NUMOPT] = {.name = NULL}};
 
@@ -164,76 +150,32 @@ void check_status(const char *msg, int s) {
 
 
 /**
- * @brief      Calculates the bipolar electrodes' mask required by the amplifier
- *             to open a stream.
+ * @brief      Get the eeg and sensors channels' labels in case the user uses a
+ *             specific montage.
  *
- * @details    The mask is a hex format. It represents the binary array of the
- *             required channels. The mask is defined according to the number of
- *             bipolar channels requested by the user (optv[2]). For now, if the
- *             user specifies X bip channels, he has to connect the first X
- *             electrodes on the bipolar boxes.
- *
- * @param      eegodev  The eegodev
- * @param      optv     The optv
- *
- * @return     The bip mask.
+ * @param      eegodev  The eegodev.
  */
-static unsigned long long compute_bip_mask(struct eego_eegdev* eegodev,
-                                           const char* optv[]) {
-  // HARD CODED --> TO CHANGE!!!
-  // For now required that the user use the first n EXG channels. He cannot connect to any channels.
-  unsigned long long bip_mask;
+static void get_label(struct eego_eegdev* eegodev) {
+  int j = 0;
+  int val;
+  eegodev->eeglabel = malloc(eegodev->NUM_EEG_CH * sizeof(char*));
+  eegodev->sensorlabel = malloc(eegodev->NUM_EXG_CH * sizeof(char*));
 
-  if (atoi(optv[2]) == 1)
-    bip_mask = 0x000001;
-  else if (atoi(optv[2]) == 2)
-    bip_mask = 0x000003;
-  else if (atoi(optv[2]) == 3)
-    bip_mask = 0x000007;
-  else if (atoi(optv[2]) == 4)
-    bip_mask = 0x00000F;
-  else if (atoi(optv[2]) == 5)
-    bip_mask = 0x00001F;
-  else if (atoi(optv[2]) == 6)
-    bip_mask = 0x00003F;
-  else if (atoi(optv[2]) == 7)
-    bip_mask = 0x00007F;
-  else if (atoi(optv[2]) == 8)
-    bip_mask = 0x0000FF;
-  else if (atoi(optv[2]) == 9)
-    bip_mask = 0x0001FF;
-  else if (atoi(optv[2]) == 10)
-    bip_mask = 0x0003FF;
-  else if (atoi(optv[2]) == 11)
-    bip_mask = 0x0007FF;
-  else if (atoi(optv[2]) == 12)
-    bip_mask = 0x000FFF;
-  else if (atoi(optv[2]) == 13)
-    bip_mask = 0x001FFF;
-  else if (atoi(optv[2]) == 14)
-    bip_mask = 0x003FFF;
-  else if (atoi(optv[2]) == 15)
-    bip_mask = 0x007FFF;
-  else if (atoi(optv[2]) == 16)
-    bip_mask = 0x00FFFF;
-  else if (atoi(optv[2]) == 17)
-    bip_mask = 0x01FFFF;
-  else if (atoi(optv[2]) == 18)
-    bip_mask = 0x03FFFF;
-  else if (atoi(optv[2]) == 19)
-    bip_mask = 0x07FFFF;
-  else if (atoi(optv[2]) == 20)
-    bip_mask = 0x0FFFFF;
-  else if (atoi(optv[2]) == 21)
-    bip_mask = 0x1FFFFF;
-  else if (atoi(optv[2]) == 22)
-    bip_mask = 0x3FFFFF;
-  else if (atoi(optv[2]) == 23)
-    bip_mask = 0x7FFFFF;
-  else if (atoi(optv[2]) == 24)
-    bip_mask = 0xFFFFFF;
+  for (int i = 0; i < 64; ++i) {
+     val = (eegodev->ref_mask >> i) & 1;
+     if (val == 1) {
+      eegodev->eeglabel[j] = malloc(8 * sizeof(char));
+      strcpy(eegodev->eeglabel[j], eegolabel[i]);
+       ++j;}}
 
-  return bip_mask;
+  j = 0;
+  for (int i = 0; i < 24; ++i)
+  {
+    val = (eegodev->bip_mask >> i) & 1;
+     if (val == 1) {
+      eegodev->sensorlabel[j] = malloc(8 * sizeof(char));
+      strcpy(eegodev->sensorlabel[j], sensorlabel[i]);
+       ++j;}}
 }
 
 
@@ -280,7 +222,6 @@ static void initialize_amplifiers(struct eego_eegdev* eegodev) {
     printf("amp : %s\n", eegodev->amplifier_info.serial);
   }
   free(amplifier_info_tmp);
-  
 }
 
 
@@ -329,12 +270,10 @@ static double get_bip_range(struct eego_eegdev* eegodev){
 static void get_channel_list(struct eego_eegdev* eegodev) {
 
   // gets the channels list.
-  int bytes_to_allocate =
-      sizeof(eemagine_sdk_channel_info) * eegodev->stream_nb_channels;
+  int bytes_to_allocate = sizeof(eemagine_sdk_channel_info) * eegodev->stream_nb_channels;
   eemagine_sdk_channel_info* channel_info_array;
   channel_info_array = malloc(bytes_to_allocate);
-  eemagine_sdk_get_stream_channel_list(eegodev->streams_id, channel_info_array,
-                                       bytes_to_allocate);
+  eemagine_sdk_get_stream_channel_list(eegodev->streams_id, channel_info_array, bytes_to_allocate);
   printf("nb channels: %d\n", eegodev->stream_nb_channels);
 
   // Assign the number of EEG, EXG, COUNT and TRIG channels 
@@ -356,6 +295,9 @@ static void get_channel_list(struct eego_eegdev* eegodev) {
   }
   eegodev->NCH = (eegodev->NUM_EEG_CH + eegodev->NUM_EXG_CH +
                   eegodev->NUM_TRI_CH + eegodev->NUM_SAMPLE_COUNTER_CH);
+  
+  // Asssign the proper eeg labels according to the given mask.
+  get_label(eegodev);
 
   free(channel_info_array);  
 }
@@ -372,11 +314,11 @@ static int eego_set_capability(struct eego_eegdev* eegodev,
                                const char* optv[]) {
   struct systemcap cap = {
       .sampling_freq = atoi(optv[0]),
-      .type_nch[EGD_EEG] = atoi(optv[1]),
-      .type_nch[EGD_SENSOR] = atoi(optv[2]),
-      .type_nch[EGD_TRIGGER] = atoi(optv[3]),
-      .device_type = optv[4],
-      .device_id = optv[5],
+      .type_nch[EGD_EEG] = eegodev->NUM_EEG_CH,
+      .type_nch[EGD_SENSOR] = eegodev->NUM_EXG_CH,
+      .type_nch[EGD_TRIGGER] = eegodev->NUM_TRI_CH,
+      .device_type = optv[3],
+      .device_id = optv[4],
   };
   struct devmodule* dev = &eegodev->dev;
 
@@ -444,8 +386,12 @@ static int eego_open_device(struct devmodule* dev, const char* optv[]) {
 
   struct eego_eegdev* eegodev = get_eego(dev);
 
-  unsigned long long ref_mask = 0xFFFFFFFFFFFFFFFF;
-  unsigned long long bip_mask = compute_bip_mask(eegodev, optv);
+  // Prepare the masks in the proper format.
+  int mask;
+  sscanf(optv[1], "%x", &mask);
+  eegodev->ref_mask = (unsigned long long) mask;
+  sscanf(optv[2], "%x", &mask);
+  eegodev->bip_mask = (unsigned long long) mask;
 
   // Initialize the amplifiers
   initialize_amplifiers(eegodev);
@@ -457,7 +403,7 @@ static int eego_open_device(struct devmodule* dev, const char* optv[]) {
   // Open the stream.
   eegodev->streams_id = eemagine_sdk_open_eeg_stream(
       eegodev->amplifier_info.id, atoi(optv[0]), reference_range, bipolar_range,
-      ref_mask, bip_mask);
+      eegodev->ref_mask, eegodev->bip_mask);
   check_status("open eeg stream", eegodev->streams_id);
 
   // Get the channels number.
@@ -486,6 +432,23 @@ error:
 }
 
 
+
+/**
+ * @brief      Free the eegodev's attributes eeglabel and sensorlabel.
+ *
+ * @param      eegodev  The eegodev
+ */
+static void free_label(struct eego_eegdev* eegodev) {
+  for (int i = 0; i < eegodev->NUM_EEG_CH; ++i)
+    free(eegodev->eeglabel[i]);
+  free(eegodev->eeglabel);
+
+  for (int i = 0; i < eegodev->NUM_EXG_CH; ++i)
+    free(eegodev->sensorlabel[i]);
+  free(eegodev->sensorlabel);
+
+}
+
 /**
  * @brief      Close the communication with the device
  *
@@ -495,13 +458,16 @@ error:
  */
 static int eego_close_device(struct devmodule* dev) {
   struct eego_eegdev* eegodev = get_eego(dev);
-  
+
+
   pthread_mutex_lock(&eegodev->acqlock);
   eegodev->runacq = 0;
   pthread_mutex_unlock(&eegodev->acqlock);
   check_status("close stream: ", eemagine_sdk_close_stream(eegodev->streams_id));
   check_status("close amplifier: ",eemagine_sdk_close_amplifier(eegodev->amplifier_info.id));
 
+  free_label(eegodev);
+  
   pthread_join(eegodev->thread_id, NULL);
   pthread_mutex_destroy(&eegodev->acqlock);
   eemagine_sdk_exit();
@@ -562,18 +528,16 @@ static void eego_fill_chinfo(const struct devmodule* dev, int stype,
     info->dtype = EGD_DOUBLE;
     info->min.valdouble = -DBL_MAX;
     info->max.valdouble = DBL_MAX;
-    if (eegodev->NUM_EEG_CH == 32)
-      info->label = (stype == EGD_EEG) ? eegolabel32[ich] : sensorlabel[ich];
-    else if (eegodev->NUM_EEG_CH == 64)
-      info->label = (stype == EGD_EEG) ? eegolabel64[ich] : sensorlabel[ich];
-    else if (eegodev->NUM_EEG_CH == 128)
-      info->label = (stype == EGD_EEG) ? eegolabel128[ich] : sensorlabel[ich];
+    if (eegodev->NUM_EEG_CH == 124)
+      info->label = (stype == EGD_EEG) ? eegolabel[ich] : sensorlabel[ich];
+    else
+      info->label = (stype == EGD_EEG) ? eegodev->eeglabel[ich] : eegodev->sensorlabel[ich];
     t = 0;
   } else {
     info->isint = 0;
     info->dtype = EGD_DOUBLE;
-    info->min.valdouble = -EGD_DOUBLE;
-    info->max.valdouble = EGD_DOUBLE;
+    info->min.valdouble = -DBL_MAX;
+    info->max.valdouble = DBL_MAX;
     info->label = trigglabel;
     t = 1;
   }
