@@ -58,10 +58,8 @@ struct eego_eegdev {
 #define DEFAULT_SAMPLING_FREQ "512"
 #define DEFAULT_REF_MASK "0xFFFFFFFFFFFFFFFF"
 #define DEFAULT_BIP_MASK "0x000000"
-#define DEFAULT_DEVICE_TYPE "Antneuro"
-#define DEFAULT_DEVICE_ID "N/A"
 
-static const label8_t eegolabel[] = {
+static label8_t eegolabel[] = {
     "FP1",   "FPZ",    "FP2",   "F7",     "F3",    "FZ",     "F4",     "F8",
     "FC5",   "FC1",    "FC2",   "FC6",    "M1",    "T7",     "C3",     "CZ",
     "C4",    "T8",     "M2",    "CP5",    "CP1",   "CP2",    "CP6",    "P7",
@@ -86,11 +84,9 @@ static const char sensorlabel[][8] = {
     "sens19", "sens20", "sens21", "sens22", "sens23", "sens24"};
 
 static const char trigglabel[] = "Status";
-static const char eego_device_type[] = "Antneuro";
-static const char eego_device_id[] = "eego";
 static const char* eegounit[] = {"uV", "Boolean"};
-static const char* eegotransducter[] = {"Active electrode",
-                                        "Trigger and Status"};
+static const char* eegotransducter[] = {"Wet active electrode",
+                                        "Trigger"};
 
 
 static const union gval eego_scales[EGD_NUM_DTYPE] = {
@@ -103,16 +99,12 @@ enum {
   OPT_SR,
   OPT_REF_MASK,
   OPT_BIP_MASK,
-  OPT_DEVICE_TYPE,
-  OPT_DEVICE_ID,
   NUMOPT
 };
 static const struct egdi_optname eego_options[] = {
     [OPT_SR] = {.name = "SR", .defvalue = DEFAULT_SAMPLING_FREQ},
     [OPT_REF_MASK] = {.name = "EEG_MASK", .defvalue = DEFAULT_REF_MASK},
     [OPT_BIP_MASK] = {.name = "BIP_MASK", .defvalue = DEFAULT_BIP_MASK},
-    [OPT_DEVICE_TYPE] = {.name = "DEVICE_TYPE", .defvalue = DEFAULT_DEVICE_TYPE},
-    [OPT_DEVICE_ID] = {.name = "DEVICE_ID", .defvalue = DEFAULT_DEVICE_ID},
     [NUMOPT] = {.name = NULL}};
 
 
@@ -203,14 +195,21 @@ static void initialize_amplifiers(struct eego_eegdev* eegodev) {
 
   // If two amplifiers connected, create a cascaded amplifier (for 128 channels)
   if (eegodev->amplifiers_nb == 2) {
+    
     int* amplifier_info_tmp_id;
+    char amplifier_tmp_serial[80];
     amplifier_info_tmp_id = malloc(sizeof(int) * eegodev->amplifiers_nb);
 
     for (int i = 0; i < eegodev->amplifiers_nb; ++i) {  
       amplifier_info_tmp_id[i] = amplifier_info_tmp[i].id;
       printf("amp %i : %s\n", i, amplifier_info_tmp[i].serial);
+      if (i == 0)
+        strcpy(amplifier_tmp_serial, amplifier_info_tmp[i].serial);
+      else
+        strcat(amplifier_tmp_serial, amplifier_info_tmp[i].serial);
+      strcat(amplifier_tmp_serial, "\n");
     }
-
+    strcpy(eegodev->amplifier_info.serial, amplifier_tmp_serial);
     eegodev->amplifier_info.id = eemagine_sdk_create_cascaded_amplifier(
         amplifier_info_tmp_id, eegodev->amplifiers_nb);
     check_status("create cascaded amplifier", eegodev->amplifier_info.id);
@@ -317,8 +316,8 @@ static int eego_set_capability(struct eego_eegdev* eegodev,
       .type_nch[EGD_EEG] = eegodev->NUM_EEG_CH,
       .type_nch[EGD_SENSOR] = eegodev->NUM_EXG_CH,
       .type_nch[EGD_TRIGGER] = eegodev->NUM_TRI_CH,
-      .device_type = optv[3],
-      .device_id = optv[4],
+      .device_type = "Eego (Antneuro)",
+      .device_id = eegodev->amplifier_info.serial
   };
   struct devmodule* dev = &eegodev->dev;
 
@@ -528,7 +527,7 @@ static void eego_fill_chinfo(const struct devmodule* dev, int stype,
     info->dtype = EGD_DOUBLE;
     info->min.valdouble = -DBL_MAX;
     info->max.valdouble = DBL_MAX;
-    if (eegodev->NUM_EEG_CH == 124)
+    if (eegodev->NUM_EEG_CH == 128)
       info->label = (stype == EGD_EEG) ? eegolabel[ich] : eegodev->sensorlabel[ich];
     else
       info->label = (stype == EGD_EEG) ? eegodev->eeglabel[ich] : eegodev->sensorlabel[ich];
