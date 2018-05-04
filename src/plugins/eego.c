@@ -3,15 +3,10 @@
 #endif
 
 #include <errno.h>
-#include <fcntl.h>
 #include <pthread.h>
-#include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -22,7 +17,6 @@
 
 #define EEGO_SDK_BIND_STATIC
 
-//typedef const char label4_t[4];
 typedef const char label8_t[8];
 
 struct eego_eegdev {

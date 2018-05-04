@@ -7,12 +7,20 @@ eegdev-eego - eegdev backend for Antneuro eego hardware.
 The \fBeego\fP plugin implements the backend of the eegdev library for
 Antneuro eego hardware. It supports both \fB32\fP, \fB64\fP and \fB128\fP caps. It automatically detects the cap layout.
 
+By default, USB devices are \fBonly\fP accessible by root.
+To allow normal users to use the eego amplifier, add a \fBudev rule\fP:
+
+1) sudo cp <yourPath>/eegdev/auxconfig/90-eego.rules /etc/udev/rules.d
+
+2) sudo service udev restart
+
 .SH CONFIGURATION
 .LP
 This plugin supports several options. The default value will be used
 if none of the configuration files nor the configuration string (see
 \fBegd_open\fP(3)) specify the option.
 .TP
+
 .B SR
 The sampling rate can be set to \fB500\fP, \fB512\fP, \fB1000\fP, \fB1024\fP, \fB2000\fP, \fB2048\fP, \fB4000\fP, \fB4096\fP, \fB8000\fP, \fB8192\fP, \fB16000\fP, \fB16384\fP Hz. Default value is \fB512\fP Hz.
 .TP
@@ -34,7 +42,7 @@ The bipolar mask is the hexadecimal representation of the binary mask defining w
 .IP "/etc/eegdev/eegdev.conf" 4
 .PD
 Shared configuration file.
-.IP "/etc/eegdev/biosemi.conf" 4
+.IP "/etc/eegdev/eego.conf" 4
 .PD
 Configuration file loaded when the plugin is used. The settings specified
 here overrides the settings in the shared configuration file.
