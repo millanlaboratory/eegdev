@@ -20,23 +20,16 @@
 # include <config.h>
 #endif
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stddef.h>
-#include <string.h>
 #include <pthread.h>
 #include <errno.h>
-#include <stdint.h>
-#include <sys/socket.h>
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/rfcomm.h>
+
 #include "DSI.h"
 #include <eegdev-pluginapi.h>
 #include <float.h>
+
+typedef const char label4_t[4];
 
 struct wsdsi_eegdev {
 
@@ -49,16 +42,16 @@ struct wsdsi_eegdev {
 
 	unsigned int samplesPerBatch;
 	double bufferAheadSec;
-	const char * serialport;
+	const char * port;
 };
 
 #define get_wsdsi(dev_p) ((struct wsdsi_eegdev*)(dev_p))
 
-//#define DEFAULT_PORT	"/dev/ttyUSB0"
-#define DEFAULT_PORT	"/dev/rfcomm1"
-#define DEFAULT_VERBOSITY	"0"
-#define DEFAULT_SAMPLEBATCH "1"
-#define DEFAULT_BUFFERAHEADSEC "0.0005"
+#define DEFAULT_PORT	"/dev/ttyUSB0"
+#define DEFAULT_REF	"A1/2+A2/2"
+#define DEFAULT_VERBOSITY	"2"
+#define DEFAULT_SAMPLEBATCH "15"
+#define DEFAULT_BUFFERAHEADSEC "0.06"
 
 /******************************************************************
  *                       wsdsi internals                     	  *
@@ -69,34 +62,42 @@ struct wsdsi_eegdev {
 #define NCH 	19
 
 
-static const char wsdsilabel[NCH][10]= {
+static const char * wsdsilabels = "Fp1 Fp2 Fz F3 F4 F7 F8 Cz C3 C4 T3 T4 T5 T6 Pz P3 P4 O1 O2";
+
+static label4_t wsdsilabel[NCH]= {
 	"Fp1", "Fp2", "Fz", "F3", "F4", "F7", "F8",
 	"Cz", "C3", "C4", "T3", "T4", "T5", "T6",
 	"Pz", "P3", "P4", "O1", "O2"
 };
 
-static const char * wsdsilabels = "Fp1 Fp2 Fz F3 F4 F7 F8 Cz C3 C4 T3 T4 T5 T6 Pz P3 P4 O1 O2";
 
-static const char wsdsiunit[] = "uV";
-static const char wsdsitransducter[] = "Dry electrode";
+static const char* wsdsiunit[] = {"uV", "Boolean"};
+static const char* wsdsitransducter[] = {"Dry active electrode", "Trigger"};
 	
 static const union gval wsdsi_scales[EGD_NUM_DTYPE] = {
 	[EGD_INT32] = {.valint32_t = 1},
 	[EGD_FLOAT] = {.valfloat = 1.0f},	// in uV
 	[EGD_DOUBLE] = {.valdouble = 1.0}	// in uV
 };
-static const int wsdsi_provided_stypes[] = {EGD_EEG};
 
-enum {OPT_VERBOSITY, OPT_SERIALPORT, OPT_SAMPLEBATCH, OPT_BUFFERAHEADSEC, NUMOPT};
+enum {
+  OPT_PORT,
+  OPT_REF,
+  OPT_VERBOSITY, 
+  OPT_SAMPLEBATCH,
+  OPT_BUFFERAHEADSEC,
+  NUMOPT};
+
 static const struct egdi_optname wsdsi_options[] = {
-	[OPT_VERBOSITY] = {.name = "verbosity", .defvalue = DEFAULT_VERBOSITY},
-	[OPT_SERIALPORT] = {.name = "serialport", .defvalue = DEFAULT_PORT},
-	[OPT_SAMPLEBATCH] = {.name = "samplesPerBatch", .defvalue = DEFAULT_SAMPLEBATCH},
-	[OPT_BUFFERAHEADSEC] = {.name = "bufferAheadSec", .defvalue = DEFAULT_BUFFERAHEADSEC},
+	[OPT_PORT] = {.name = "PORT", .defvalue = DEFAULT_PORT},
+	[OPT_REF] = {.name = "REF", .defvalue = DEFAULT_REF},
+	[OPT_VERBOSITY] = {.name = "VERBOSE", .defvalue = DEFAULT_VERBOSITY},
+	[OPT_SAMPLEBATCH] = {.name = "SAMPLEBATCH", .defvalue = DEFAULT_SAMPLEBATCH},
+	[OPT_BUFFERAHEADSEC] = {.name = "BUFFERAHEADSEC", .defvalue = DEFAULT_BUFFERAHEADSEC},
 	[NUMOPT] = {.name = NULL}
 };
 
-/*
+
 int Message( const char * msg, int debugLevel )
     {
         return fprintf( stderr, "DSI Message (level %d): %s\n", debugLevel, msg );
@@ -108,21 +109,20 @@ int Error( void )
         else return 0;
     }
 
-#define      if( Error() != 0 ) return -1;
-*/
-static
-int wsdsi_set_capability(struct wsdsi_eegdev* wsdsidev, const char* serialport)
+#define CHECK	Error();
+
+static int wsdsi_set_capability(struct wsdsi_eegdev* wsdsidev)
 {
 	struct systemcap cap = {
 		.sampling_freq = 300, 
 		.type_nch = {[EGD_EEG] = NCH},
-		.device_type = "wsdsi",
-		.device_id = serialport
+		.device_type = "wsdsi 24 (Wearable Sensings)",
+		.device_id = wsdsidev->port
 	};
 	struct devmodule* dev = &wsdsidev->dev;
 
 	dev->ci.set_cap(dev, &cap);
-	dev->ci.set_input_samlen(dev, NCH*sizeof(double)*wsdsidev->samplesPerBatch);
+	dev->ci.set_input_samlen(dev, NCH*sizeof(double));
 	return 0;
 }
 
@@ -139,8 +139,8 @@ static void* wsdsi_read_fn(void* arg)
 
 	unsigned int targetExcessSamples = ( int )( 0.5 + DSI_Headset_GetSamplingRate( wsdsidev->h ) * wsdsidev->bufferAheadSec );
 
-	DSI_Headset_ConfigureBatch( wsdsidev->h, wsdsidev->samplesPerBatch, wsdsidev->bufferAheadSec );
-	DSI_Headset_StartBackgroundAcquisition( wsdsidev->h );
+	DSI_Headset_ConfigureBatch( wsdsidev->h, wsdsidev->samplesPerBatch, wsdsidev->bufferAheadSec ); CHECK
+	DSI_Headset_StartBackgroundAcquisition( wsdsidev->h ); CHECK
 
 
 	while (1) {
@@ -148,13 +148,13 @@ static void* wsdsi_read_fn(void* arg)
 		if (!runacq)
 			break;
 		
-		DSI_Headset_WaitForBatch( wsdsidev->h );
+		DSI_Headset_WaitForBatch( wsdsidev->h ); CHECK
 
 		for(int channelIndex = 0; channelIndex < DSI_Headset_GetNumberOfChannels( wsdsidev->h ); channelIndex++ ){
-			DSI_Channel c = DSI_Headset_GetChannelByIndex( wsdsidev->h, channelIndex );
+			DSI_Channel c = DSI_Headset_GetChannelByIndex( wsdsidev->h, channelIndex ); CHECK
 				for( int sampleIndex = 0; sampleIndex < wsdsidev->samplesPerBatch; sampleIndex++ ){
 					// The background thread is filling the buffers. This is where you empty them:
-					databuffer[channelIndex * wsdsidev->samplesPerBatch  + sampleIndex ] = DSI_Channel_ReadBuffered( c );
+					databuffer[channelIndex * wsdsidev->samplesPerBatch  + sampleIndex ] = DSI_Channel_ReadBuffered( c ); CHECK
 				}
 			}
 		
@@ -168,31 +168,32 @@ error:
 	return NULL;
 }
 
+
 /******************************************************************
  *               WQ20 methods implementation                	  *
  ******************************************************************/
 static int wsdsi_open_device(struct devmodule* dev, const char* optv[]){
 
 	struct wsdsi_eegdev* wsdsidev = get_wsdsi(dev);
-	wsdsidev->serialport = optv[OPT_SERIALPORT];
+	wsdsidev->port = optv[OPT_PORT];
 	wsdsidev->samplesPerBatch = atoi(optv[OPT_SAMPLEBATCH]);
 	wsdsidev->bufferAheadSec = atof(optv[OPT_BUFFERAHEADSEC]);
 
 	int ret;
 
-	const char * dllname = "libDSI-Linux-x86_64.so";
-	int load_error = Load_DSI_API( dllname);
+	const char * dllname = "libdsi.so";
+	int load_error = Load_DSI_API( dllname );
 	if( load_error < 0 ) return fprintf( stderr, "failed to load dynamic library \"%s\"\n", DSI_DYLIB_NAME( dllname ) );
     if( load_error > 0 ) return fprintf( stderr, "failed to import %d functions from dynamic library \"%s\"\n", load_error, DSI_DYLIB_NAME( dllname ) );
-
+	
 	// Create device
-	wsdsidev->h = DSI_Headset_New(NULL); 
-	//DSI_Headset_SetMessageCallback( wsdsidev->h, Message ); 
-	DSI_Headset_SetVerbosity( wsdsidev->h, atoi(DEFAULT_VERBOSITY) ); 
-	DSI_Headset_Connect( wsdsidev->h, wsdsidev->serialport ); 
-	DSI_Headset_ChooseChannels( wsdsidev->h, wsdsilabels, NULL, 0 ); 
-	fprintf( stderr, "%s\n", DSI_Headset_GetInfoString( wsdsidev->h ) ); 
-	wsdsi_set_capability(wsdsidev, wsdsidev->serialport);
+	wsdsidev->h = DSI_Headset_New(NULL);
+	DSI_Headset_SetMessageCallback( wsdsidev->h, Message );
+	DSI_Headset_SetVerbosity( wsdsidev->h, atoi(optv[OPT_VERBOSITY]) ); CHECK 
+	DSI_Headset_Connect( wsdsidev->h, wsdsidev->port ); CHECK
+	DSI_Headset_ChooseChannels( wsdsidev->h, wsdsilabels, optv[OPT_REF], 1 ); CHECK 
+	fprintf( stderr, "%s\n", DSI_Headset_GetInfoString( wsdsidev->h ) );
+	wsdsi_set_capability(wsdsidev);
 
 	pthread_mutex_init(&(wsdsidev->acqlock), NULL);
 	wsdsidev->runacq = 1;
@@ -206,29 +207,25 @@ error:
 	return -1;
 }
 
-
-static
-int wsdsi_close_device(struct devmodule* dev)
+static int wsdsi_close_device(struct devmodule* dev)
 {
 	struct wsdsi_eegdev* wsdsidev = get_wsdsi(dev);
-	status = pthread_mutex_lock(&eegodev->acqlock);
+	pthread_mutex_lock(&wsdsidev->acqlock);
     wsdsidev->runacq = 0;
-    status = pthread_mutex_unlock(&eegodev->acqlock);
+    pthread_mutex_unlock(&wsdsidev->acqlock);
     
-	DSI_Headset_SetSampleCallback( wsdsidev->h, NULL, NULL );
-	DSI_Headset_StopDataAcquisition( wsdsidev->h );
-	DSI_Headset_Idle( wsdsidev->h, 1.0 );
-	DSI_Headset_Delete( wsdsidev->h );
+	DSI_Headset_SetSampleCallback( wsdsidev->h, NULL, NULL ); CHECK
+	DSI_Headset_StopDataAcquisition( wsdsidev->h ); CHECK
+	DSI_Headset_Idle( wsdsidev->h, 1.0 ); CHECK
+	DSI_Headset_Delete( wsdsidev->h ); CHECK
 
 	pthread_join(wsdsidev->thread_id, NULL);
-    pthread_mutex_destroy(&wsdsi->acqlock);
+    pthread_mutex_destroy(&wsdsidev->acqlock);
 
 	return 0;
 }
 
-
-static
-int wsdsi_set_channel_groups(struct devmodule* dev, unsigned int ngrp,
+static int wsdsi_set_channel_groups(struct devmodule* dev, unsigned int ngrp,
 					const struct grpconf* grp)
 {
 	unsigned int i;
@@ -259,13 +256,14 @@ static void wsdsi_fill_chinfo(const struct devmodule* dev, int stype,
 	(void)dev;
 	(void)stype;
 
+	int t = 0;
 	info->isint = 0;
 	info->dtype = EGD_DOUBLE;
 	info->min.valdouble = -DBL_MAX; // * wsdsi_scales[EGD_DOUBLE].valdouble;
 	info->max.valdouble = DBL_MAX; // * wsdsi_scales[EGD_DOUBLE].valdouble;
 	info->label = wsdsilabel[ich];
-	info->unit = wsdsiunit;
-	info->transducter = wsdsitransducter;
+	info->unit = wsdsiunit[t];
+	info->transducter = wsdsitransducter[t];
 }
 
 
