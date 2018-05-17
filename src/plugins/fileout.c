@@ -67,7 +67,7 @@ static const unsigned int dattab[EGD_NUM_DTYPE] = {
 static const char xdfout_device_type[] = "Data file";
 
 static const char eegch_regex[] = "^("
-	"(N|Fp|FP|AF|F|FT|FC|A|T|C|TP|CP|P|PO|O|I|AFF|FTT|FCC|TPP|CPP|POO|AFp|FFT|FFC|TTP|CCP|PPO|OI|REF|Ref|M)(z|[[:digit:]][[:digit:]]?)"
+	"(N|Fp|FP|AF|F|FT|FC|A|T|C|TP|CP|P|PO|O|I|AFF|FTT|FCC|TPP|CPP|POO|AFp|FFT|FFC|TTP|CCP|PPO|OI|REF|Ref|M)(z|Z|[[:digit:]][[:digit:]]?)"
 	"|([ABCDEF][[:digit:]][[:digit:]]?)"
 	"|((EEG|[Ee]eg)[-:]?[[:digit:]]*)"
 	")";
