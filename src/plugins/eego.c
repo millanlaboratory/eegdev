@@ -70,8 +70,8 @@ static label8_t eegolabel200[] = {
     "P3",    "PZ",     "P4",    "P8",     "POZ",   "O1",     "O2",     "EOG",
     "AF7",   "AF3",    "AF4",   "AF8",    "F5",    "F1",     "F2",     "F6",
     "FC3",   "FCZ",    "FC4",   "C5",     "C1",    "C2",     "C6",     "CP3",
-    "CP4",   "P5",    "P1",     "P2",     "P6",    "PO5",    "PO3",    "PO4",
-    "PO6",   "FT7",   "FT8",    "TP7",    "TP8",   "PO7",    "PO8",    "OZ" };
+    "CP4",   "P5",     "P1",    "P2",     "P6",    "PO5",    "PO3",    "PO4",
+    "PO6",   "FT7",    "FT8",   "TP7",    "TP8",   "PO7",    "PO8",    "OZ" };
 
 // 128 channels CA-203 cap
 static label8_t eegolabel203[] = {
@@ -91,6 +91,11 @@ static label8_t eegolabel203[] = {
     "FTT9H",  "FTT7H", "FCC1H",  "FCC2H", "FTT8H",  "FTT10H", "TTP7H", "CCP1H",
     "CCP2H",  "TTP8H", "TPP7H",  "CPP1H", "CPP2H",  "TPP8H",  "PPO9H", "PPO5H",
     "PPO6H",  "PPO10H","POO9H",  "POO3H", "POO4H",  "POO10H", "OI1H",  "OI2H"};
+
+// 100000000000000000000000011111111111111111111111
+// 8000007FFFFF
+// 
+// 10000000000000000000000000000000001111111111111111111111111111111
 
 
 // 24 sensors box
@@ -415,9 +420,10 @@ static int prepareMask(struct eego_eegdev* eegodev, const char* optv[]) {
   
   } else {
     
+
     // 64 CA-200 cap
     if (strcmp(optv[3], "200") == 0) {
-      eegodev->ref_mask = (unsigned long long) 0xFFFFFFFF7FFFFFFF;
+      eegodev->ref_mask = (unsigned long long) 0x1000000007FFFFFFF; // 0xFFFFFFFF7FFFFFFF
       eegodev->eegolabel = &eegolabel200;
     } 
     // 128 CA-203 cap
