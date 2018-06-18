@@ -397,13 +397,11 @@ error:
 
 static int prepareMask(struct eego_eegdev* eegodev, const char* optv[]) {
   
-  int mask;
+  char *end;
   
   if (strcmp(optv[1],"NOMASK") != 0) {
     
-    sscanf(optv[1], "%llx", &mask);
-    printf("%llx\n", mask);
-    eegodev->ref_mask = (unsigned long long) mask;
+    eegodev->ref_mask = strtoull(optv[1], &end, 16);
     
     // 64 CA-200 cap
     if (strcmp(optv[3], "200") == 0) {
@@ -423,7 +421,7 @@ static int prepareMask(struct eego_eegdev* eegodev, const char* optv[]) {
 
     // 64 CA-200 cap
     if (strcmp(optv[3], "200") == 0) {
-      eegodev->ref_mask = (unsigned long long) 0x1000000007FFFFFFF; // 0xFFFFFFFF7FFFFFFF
+      eegodev->ref_mask = (unsigned long long) 0xFFFFFFFF7FFFFFFF;
       eegodev->eegolabel = &eegolabel200;
     } 
     // 128 CA-203 cap
@@ -438,10 +436,9 @@ static int prepareMask(struct eego_eegdev* eegodev, const char* optv[]) {
     }
   }
   
-
+  int mask;
   sscanf(optv[2], "%x", &mask);
   eegodev->bip_mask = (unsigned long long) mask;
-  printf("%llx\n", eegodev->ref_mask);
 
 }
 
