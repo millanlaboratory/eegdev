@@ -418,10 +418,9 @@ static int prepareMask(struct eego_eegdev* eegodev, const char* optv[]) {
   
   } else {
     
-
     // 64 CA-200 cap
     if (strcmp(optv[3], "200") == 0) {
-      eegodev->ref_mask = (unsigned long long) 0xFFFFFFFF7FFFFFFF;
+      eegodev->ref_mask = (unsigned long long) 0xFFFFFFFF7FFFFFFF; // 800000007FFFFFFF
       eegodev->eegolabel = &eegolabel200;
     } 
     // 128 CA-203 cap
@@ -435,10 +434,8 @@ static int prepareMask(struct eego_eegdev* eegodev, const char* optv[]) {
       eegodev->eegolabel = &eegolabel209;
     }
   }
-  
-  int mask;
-  sscanf(optv[2], "%x", &mask);
-  eegodev->bip_mask = (unsigned long long) mask;
+
+  eegodev->bip_mask = strtoull(optv[2], &end, 16);
 
 }
 
@@ -457,7 +454,6 @@ static int eego_open_device(struct devmodule* dev, const char* optv[]) {
   
   // Initialize the amplifiers
   initialize_amplifiers(eegodev);
-
   // Prepare the masks in the proper format.
   prepareMask(eegodev, optv);
 
@@ -504,15 +500,15 @@ error:
  * @param      eegodev  The eegodev
  */
 static void free_label(struct eego_eegdev* eegodev) {
-  /*
+  
   for (int i = 0; i < eegodev->NUM_EEG_CH; ++i)
     free(eegodev->eeglabel[i]);
-  */
+  
   free(eegodev->eeglabel);
-  /*
+  
   for (int i = 0; i < eegodev->NUM_EXG_CH; ++i)
     free(eegodev->sensorlabel[i]);
-  */
+  
   free(eegodev->sensorlabel);
 
 }
