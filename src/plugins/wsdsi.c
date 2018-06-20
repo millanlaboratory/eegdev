@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include "DSI.h"
 #include <eegdev-pluginapi.h>
@@ -217,8 +218,8 @@ static int wsdsi_close_device(struct devmodule* dev)
 	DSI_Headset_SetSampleCallback( wsdsidev->h, NULL, NULL ); CHECK
 	DSI_Headset_StopDataAcquisition( wsdsidev->h ); CHECK
 	DSI_Headset_Idle( wsdsidev->h, 1.0 ); CHECK
-    sleep(1);
-    //printf("%s\n", "");
+    usleep(1);
+    
 	DSI_Headset_Delete( wsdsidev->h ); CHECK
 
 	pthread_join(wsdsidev->thread_id, NULL);
