@@ -213,10 +213,12 @@ static int wsdsi_close_device(struct devmodule* dev)
 	pthread_mutex_lock(&wsdsidev->acqlock);
     wsdsidev->runacq = 0;
     pthread_mutex_unlock(&wsdsidev->acqlock);
-    
+	
 	DSI_Headset_SetSampleCallback( wsdsidev->h, NULL, NULL ); CHECK
 	DSI_Headset_StopDataAcquisition( wsdsidev->h ); CHECK
 	DSI_Headset_Idle( wsdsidev->h, 1.0 ); CHECK
+    sleep(1);
+    //printf("%s\n", "");
 	DSI_Headset_Delete( wsdsidev->h ); CHECK
 
 	pthread_join(wsdsidev->thread_id, NULL);
