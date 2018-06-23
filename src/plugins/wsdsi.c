@@ -48,18 +48,20 @@ struct wsdsi_eegdev {
 
 #define get_wsdsi(dev_p) ((struct wsdsi_eegdev*)(dev_p))
 
-#define DEFAULT_PORT	"/dev/ttyUSB0"
-#define DEFAULT_REF	"A1/2+A2/2"
-#define DEFAULT_VERBOSITY	"2"
-#define DEFAULT_SAMPLEBATCH "15"
-#define DEFAULT_BUFFERAHEADSEC "0.06"
+#define DEFAULT_PORT			"/dev/ttyUSB0"
+#define DEFAULT_REF				"A1/2+A2/2"
+#define DEFAULT_VERBOSITY		"2"
+#define DEFAULT_SAMPLEBATCH 	"15"
+#define DEFAULT_BUFFERAHEADSEC 	"0.06"
 
 /******************************************************************
  *                       wsdsi internals                     	  *
  ******************************************************************/
+/*
 #define CODE	0xB0
 #define EXCODE 	0x55
 #define SYNC 	0xAA
+*/
 #define NCH 	19
 
 
@@ -145,15 +147,19 @@ static void* wsdsi_read_fn(void* arg)
 
 
 	while (1) {
+
+		pthread_mutex_lock(&(wsdsidev->acqlock));
 		runacq = wsdsidev->runacq;
+		pthread_mutex_unlock(&(wsdsidev->acqlock));
+		
 		if (!runacq)
 			break;
 		
 		DSI_Headset_WaitForBatch( wsdsidev->h ); CHECK
 
-		for(int channelIndex = 0; channelIndex < DSI_Headset_GetNumberOfChannels( wsdsidev->h ); channelIndex++ ){
+		for(int channelIndex = 0; channelIndex < DSI_Headset_GetNumberOfChannels( wsdsidev->h ); ++channelIndex ){
 			DSI_Channel c = DSI_Headset_GetChannelByIndex( wsdsidev->h, channelIndex ); CHECK
-				for( int sampleIndex = 0; sampleIndex < wsdsidev->samplesPerBatch; sampleIndex++ ){
+				for( int sampleIndex = 0; sampleIndex < wsdsidev->samplesPerBatch; ++sampleIndex ){
 					// The background thread is filling the buffers. This is where you empty them:
 					databuffer[channelIndex * wsdsidev->samplesPerBatch  + sampleIndex ] = DSI_Channel_ReadBuffered( c ); CHECK
 				}
@@ -211,6 +217,7 @@ error:
 static int wsdsi_close_device(struct devmodule* dev)
 {
 	struct wsdsi_eegdev* wsdsidev = get_wsdsi(dev);
+	
 	pthread_mutex_lock(&wsdsidev->acqlock);
     wsdsidev->runacq = 0;
     pthread_mutex_unlock(&wsdsidev->acqlock);
@@ -218,7 +225,7 @@ static int wsdsi_close_device(struct devmodule* dev)
 	DSI_Headset_SetSampleCallback( wsdsidev->h, NULL, NULL ); CHECK
 	DSI_Headset_StopDataAcquisition( wsdsidev->h ); CHECK
 	DSI_Headset_Idle( wsdsidev->h, 1.0 ); CHECK
-    usleep(1);
+    usleep(10);
     
 	DSI_Headset_Delete( wsdsidev->h ); CHECK
 

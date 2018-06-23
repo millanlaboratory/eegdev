@@ -92,12 +92,6 @@ static label8_t eegolabel203[] = {
     "CCP2H",  "TTP8H", "TPP7H",  "CPP1H", "CPP2H",  "TPP8H",  "PPO9H", "PPO5H",
     "PPO6H",  "PPO10H","POO9H",  "POO3H", "POO4H",  "POO10H", "OI1H",  "OI2H"};
 
-// 100000000000000000000000011111111111111111111111
-// 8000007FFFFF
-// 
-// 10000000000000000000000000000000001111111111111111111111111111111
-
-
 // 24 sensors box
 static const char sensorlabel[][8] = {
     "sens1",  "sens2",  "sens3",  "sens4",  "sens5",  "sens6",
