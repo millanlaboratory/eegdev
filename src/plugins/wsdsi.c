@@ -51,8 +51,8 @@ struct wsdsi_eegdev {
 #define DEFAULT_PORT			"/dev/ttyUSB0"
 #define DEFAULT_REF				"A1/2+A2/2"
 #define DEFAULT_VERBOSITY		"2"
-#define DEFAULT_SAMPLEBATCH 	"15"
-#define DEFAULT_BUFFERAHEADSEC 	"0.06"
+#define DEFAULT_SAMPLEBATCH 	"1"
+#define DEFAULT_BUFFERAHEADSEC 	"0.0"
 
 /******************************************************************
  *                       wsdsi internals                     	  *
