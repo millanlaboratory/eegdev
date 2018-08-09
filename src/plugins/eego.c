@@ -19,7 +19,9 @@
 
 typedef const char label8_t[8];
 
+// Device's structure
 struct eego_eegdev {
+  
   struct devmodule dev;
 
   int amplifiers_nb;
@@ -46,14 +48,14 @@ struct eego_eegdev {
 
 #define get_eego(dev_p) ((struct eego_eegdev*)(dev_p))
 
-#define CODE 0xB0
-#define EXCODE 0x55
-#define SYNC 0xAA
-
+// Default values of the parameters that can be changed at launch time.
 #define DEFAULT_SAMPLING_FREQ "512"
 #define DEFAULT_REF_MASK "NOMASK"
 #define DEFAULT_BIP_MASK "0x000000"
 #define DEFAULT_CAP "200"
+
+// Verbose: 1 dump to termimal device connection info, 0 nothing.
+#define VERBOSE 0
 
 // 32 channels CA-209 cap
 static label8_t eegolabel209[] = {
@@ -133,31 +135,33 @@ static const struct egdi_optname eego_options[] = {
  * @param[in]  s     The functions's status output.
  */
 void check_status(const char *msg, int s) {
-  switch (s) {
-  case EEMAGINE_SDK_NOT_CONNECTED:
-    fprintf(stderr, "%s: status is not connected\n", msg);
-    break;
-  case EEMAGINE_SDK_ALREADY_EXISTS:
-    fprintf(stderr, "%s: status is already exists\n", msg);
-    break;
-  case EEMAGINE_SDK_NOT_FOUND:
-    fprintf(stderr, "%s: status is not found\n", msg);
-    break;
-  case EEMAGINE_SDK_INCORRECT_VALUE:
-    fprintf(stderr, "%s: status is incorrect value\n", msg);
-    break;
-  case EEMAGINE_SDK_INTERNAL_ERROR:
-    fprintf(stderr, "%s: status is internal error\n", msg);
-    break;
-  case EEMAGINE_SDK_UNKNOWN:
-    fprintf(stderr, "%s: status is unknown\n", msg);
-    break;
-  default:
-    printf("%s: status ok\n", msg);
-    break;
+  if (VERBOSE != 0)
+  {
+    switch (s) {
+    case EEMAGINE_SDK_NOT_CONNECTED:
+      fprintf(stderr, "%s: status is not connected\n", msg);
+      break;
+    case EEMAGINE_SDK_ALREADY_EXISTS:
+      fprintf(stderr, "%s: status is already exists\n", msg);
+      break;
+    case EEMAGINE_SDK_NOT_FOUND:
+      fprintf(stderr, "%s: status is not found\n", msg);
+      break;
+    case EEMAGINE_SDK_INCORRECT_VALUE:
+      fprintf(stderr, "%s: status is incorrect value\n", msg);
+      break;
+    case EEMAGINE_SDK_INTERNAL_ERROR:
+      fprintf(stderr, "%s: status is internal error\n", msg);
+      break;
+    case EEMAGINE_SDK_UNKNOWN:
+      fprintf(stderr, "%s: status is unknown\n", msg);
+      break;
+    default:
+      printf("%s: status ok\n", msg);
+      break;
   }
 }
-
+}
 
 /**
  * @brief      Get the eeg and sensors channels' labels in case the user uses a
@@ -203,7 +207,6 @@ static void initialize_amplifiers(struct eego_eegdev* eegodev) {
   eemagine_sdk_init();
   eegodev->amplifiers_nb =
       eemagine_sdk_get_amplifiers_info(amplifier_info_tmp, 2);
-  printf("nb amplifier: %d\n", eegodev->amplifiers_nb);
 
   eegodev->NUM_EEG_CH = 0;
   eegodev->NUM_EXG_CH = 0;
@@ -219,7 +222,6 @@ static void initialize_amplifiers(struct eego_eegdev* eegodev) {
 
     for (int i = 0; i < eegodev->amplifiers_nb; ++i) {  
       amplifier_info_tmp_id[i] = amplifier_info_tmp[i].id;
-      printf("amp %i : %s\n", i, amplifier_info_tmp[i].serial);
       if (i == 0)
         strcpy(amplifier_tmp_serial, amplifier_info_tmp[i].serial);
       else
@@ -235,7 +237,6 @@ static void initialize_amplifiers(struct eego_eegdev* eegodev) {
   // If only one amplifier is connected.
   else {
     eegodev->amplifier_info = amplifier_info_tmp[0];
-    printf("amp : %s\n", eegodev->amplifier_info.serial);
   }
 
   free(amplifier_info_tmp);
@@ -291,7 +292,6 @@ static void get_channel_list(struct eego_eegdev* eegodev) {
   eemagine_sdk_channel_info* channel_info_array;
   channel_info_array = malloc(bytes_to_allocate);
   eemagine_sdk_get_stream_channel_list(eegodev->streams_id, channel_info_array, bytes_to_allocate);
-  printf("nb channels: %d\n", eegodev->stream_nb_channels);
 
   // Assign the number of EEG, EXG, COUNT and TRIG channels 
   for (int j = 0; j < eegodev->stream_nb_channels; ++j) {
@@ -321,7 +321,7 @@ static void get_channel_list(struct eego_eegdev* eegodev) {
 /**
  * @brief      Sets the cap's capabilities.
  *
- * @param      eegodev  The eegodev.
+ * @param      eegodev  The device's structure.
  * @param      optv     The optv.
  *
  * @return     Always 0.
@@ -339,11 +339,11 @@ static int eego_set_capability(struct eego_eegdev* eegodev,
   struct devmodule* dev = &eegodev->dev;
 
   eegodev->offset[EGD_EEG] = 0;
-  eegodev->offset[EGD_SENSOR] = (eegodev->NUM_EEG_CH) * sizeof(double);
-  eegodev->offset[EGD_TRIGGER] = eegodev->offset[EGD_SENSOR] + (eegodev->NUM_EXG_CH) * sizeof(double);
-
+  eegodev->offset[EGD_SENSOR] = eegodev->NUM_EEG_CH * sizeof(double);
+  eegodev->offset[EGD_TRIGGER] = eegodev->offset[EGD_SENSOR] + (eegodev->NUM_EXG_CH + 1) * sizeof(double);
+  
   dev->ci.set_cap(dev, &cap);
-  dev->ci.set_input_samlen(dev, (eegodev->NCH - 1) * sizeof(double));
+  dev->ci.set_input_samlen(dev, (eegodev->NCH ) * sizeof(double)); //- 1
   return 0;
 }
 
@@ -361,7 +361,7 @@ static void* eego_read_fn(void* arg) {
 
   int runacq, buffer_status, bytes_to_allocate, nb_sample, nb_batch, samples_in_bytes;
   double* buffer;
-  samples_in_bytes = (eegodev->stream_nb_channels -1) * sizeof(double);
+  samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double); //-1
 
   while (1) {
     usleep(100000);
@@ -414,12 +414,12 @@ static int prepareMask(struct eego_eegdev* eegodev, const char* optv[]) {
     
     // 64 CA-200 cap
     if (strcmp(optv[3], "200") == 0) {
-      eegodev->ref_mask = (unsigned long long) 0xFFFFFFFF7FFFFFFF;
+      eegodev->ref_mask = (unsigned long long) 0x800000007FFFFFFF; //0xFFFFFFFF7FFFFFFF;
       eegodev->eegolabel = &eegolabel200;
     } 
     // 128 CA-203 cap
     else if (strcmp(optv[3], "203") == 0) {
-      eegodev->ref_mask = (unsigned long long) 0xFFFFFFFFFFFFFFFF;
+      eegodev->ref_mask = (unsigned long long) 0xFFFFFFFFFFFFFFFF; //
       eegodev->eegolabel = &eegolabel203;
     }
     // 32 CA-209 cap

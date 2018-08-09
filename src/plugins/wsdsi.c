@@ -16,6 +16,7 @@
     You should have received a copy of the GNU Lesser General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
@@ -32,11 +33,12 @@
 
 typedef const char label4_t[4];
 
+// Device's structure
 struct wsdsi_eegdev {
-
+	
 	struct devmodule dev;
 	DSI_Headset h;
-
+	
 	pthread_t thread_id;
 	pthread_mutex_t acqlock;
 	unsigned int runacq;
@@ -48,25 +50,18 @@ struct wsdsi_eegdev {
 
 #define get_wsdsi(dev_p) ((struct wsdsi_eegdev*)(dev_p))
 
+#define NCH 	19
+
+// Default values of the parameters that can be changed at launch time.
 #define DEFAULT_PORT			"/dev/ttyUSB0"
 #define DEFAULT_REF				"A1/2+A2/2"
-#define DEFAULT_VERBOSITY		"2"
+#define DEFAULT_VERBOSITY		"1"
 #define DEFAULT_SAMPLEBATCH 	"1"
 #define DEFAULT_BUFFERAHEADSEC 	"0.0"
 
-/******************************************************************
- *                       wsdsi internals                     	  *
- ******************************************************************/
-/*
-#define CODE	0xB0
-#define EXCODE 	0x55
-#define SYNC 	0xAA
-*/
-#define NCH 	19
 
 
 static const char * wsdsilabels = "Fp1 Fp2 Fz F3 F4 F7 F8 Cz C3 C4 T3 T4 T5 T6 Pz P3 P4 O1 O2";
-
 static label4_t wsdsilabel[NCH]= {
 	"Fp1", "Fp2", "Fz", "F3", "F4", "F7", "F8",
 	"Cz", "C3", "C4", "T3", "T4", "T5", "T6",
@@ -114,6 +109,13 @@ int Error( void )
 
 #define CHECK	Error();
 
+/**
+ * @brief      Sets the cap's capabilities.
+ *
+ * @param      wsdsidev  The device's structure.
+ *
+ * @return     Always 0.
+ */
 static int wsdsi_set_capability(struct wsdsi_eegdev* wsdsidev)
 {
 	struct systemcap cap = {
@@ -129,6 +131,14 @@ static int wsdsi_set_capability(struct wsdsi_eegdev* wsdsidev)
 	return 0;
 }
 
+
+/**
+ * @brief      Get the data and update the eegdev structure.
+ *
+ * @param      arg   A pointer on the wsdsi structure.
+ *
+ * @return     Always NULL.
+ */
 static void* wsdsi_read_fn(void* arg)
 {
 	
@@ -144,7 +154,6 @@ static void* wsdsi_read_fn(void* arg)
 
 	DSI_Headset_ConfigureBatch( wsdsidev->h, wsdsidev->samplesPerBatch, wsdsidev->bufferAheadSec ); CHECK
 	DSI_Headset_StartBackgroundAcquisition( wsdsidev->h ); CHECK
-
 
 	while (1) {
 
@@ -162,9 +171,8 @@ static void* wsdsi_read_fn(void* arg)
 				for( int sampleIndex = 0; sampleIndex < wsdsidev->samplesPerBatch; ++sampleIndex ){
 					// The background thread is filling the buffers. This is where you empty them:
 					databuffer[channelIndex * wsdsidev->samplesPerBatch  + sampleIndex ] = DSI_Channel_ReadBuffered( c ); CHECK
-				}
-			}
-		
+				}}
+						
 		// Update the eegdev structure with the new data
 		if (ci->update_ringbuffer(&(wsdsidev->dev), databuffer, samlen))
 			break;
@@ -175,10 +183,14 @@ error:
 	return NULL;
 }
 
-
-/******************************************************************
- *               WQ20 methods implementation                	  *
- ******************************************************************/
+/**
+ * @brief      Plugin's main
+ *
+ * @param      dev   A pointer on the devmodule structure.
+ * @param      optv  The optv.
+ *
+ * @return     0 if successful, -1 otherwise.
+ */
 static int wsdsi_open_device(struct devmodule* dev, const char* optv[]){
 
 	struct wsdsi_eegdev* wsdsidev = get_wsdsi(dev);
@@ -214,6 +226,13 @@ error:
 	return -1;
 }
 
+/**
+ * @brief      Close the communication with the device
+ *
+ * @param      dev   A pointer on the devmodule struct.
+ *
+ * @return     Always true
+ */
 static int wsdsi_close_device(struct devmodule* dev)
 {
 	struct wsdsi_eegdev* wsdsidev = get_wsdsi(dev);
@@ -235,6 +254,17 @@ static int wsdsi_close_device(struct devmodule* dev)
 	return 0;
 }
 
+
+/**
+ * @brief      Set the channel groups parameters used by eegdev
+ *
+ * @param      dev   A pointer on the devmodule structure.
+ * @param[in]  ngrp  The group's number corresponding to eeg, exg or trig.
+ * @param[in]  grp   The array of grpconf struct containing specific group's
+ *                   informations.
+ *
+ * @return     Always 0.
+ */
 static int wsdsi_set_channel_groups(struct devmodule* dev, unsigned int ngrp,
 					const struct grpconf* grp)
 {
@@ -259,7 +289,14 @@ static int wsdsi_set_channel_groups(struct devmodule* dev, unsigned int ngrp,
 	return 0;
 }
 
-
+/**
+ * @brief      Fill channel information for each groups
+ *
+ * @param[in]  dev    A pointer on the devmodule struct.
+ * @param[in]  stype  The group type.
+ * @param[in]  ich    The channel index.
+ * @param      info   The egd_chinfo to fill.
+ */
 static void wsdsi_fill_chinfo(const struct devmodule* dev, int stype,
 	                     unsigned int ich, struct egd_chinfo* info)
 {
@@ -269,8 +306,8 @@ static void wsdsi_fill_chinfo(const struct devmodule* dev, int stype,
 	int t = 0;
 	info->isint = 0;
 	info->dtype = EGD_DOUBLE;
-	info->min.valdouble = -DBL_MAX; // * wsdsi_scales[EGD_DOUBLE].valdouble;
-	info->max.valdouble = DBL_MAX; // * wsdsi_scales[EGD_DOUBLE].valdouble;
+	info->min.valdouble = -DBL_MAX;
+	info->max.valdouble = DBL_MAX;
 	info->label = wsdsilabel[ich];
 	info->unit = wsdsiunit[t];
 	info->transducter = wsdsitransducter[t];
