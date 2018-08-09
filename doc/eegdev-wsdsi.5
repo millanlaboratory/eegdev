@@ -1,0 +1,75 @@
+.\"Copyright 2012 (c) EPFL
+.TH EEGDEV-WSDSI 5 2012 "EPFL" "EEGDEV library manual"
+.SH NAME
+eegdev-wsdsi - eegdev backend for Wearable Sensing wsdsi24 hardware.
+.SH DESCRIPTION
+.LP
+The \fBwsdsi\fP plugin implements the backend of the eegdev library for
+Wearable Sensing wsdsi24 hardware. It supports \fB19 EEG\fP and up to \fB3 EXG\fP. It can be a wired or a bluetooth connection. In case of bluetooth, the pairing and connection to the dongle has to be done before. 
+
+.SH CONFIGURATION
+.LP
+This plugin supports several options. The default value will be used
+if none of the configuration files nor the configuration string (see
+\fBegd_open\fP(3)) specify the option.
+.TP
+.B SR
+The sampling rate can be set to \fB500\fP, \fB512\fP, \fB1000\fP, \fB1024\fP, \fB2000\fP, \fB2048\fP, \fB4000\fP, \fB4096\fP, \fB8000\fP, \fB8192\fP, \fB16000\fP, \fB16384\fP Hz. Default value is \fB512\fP Hz.
+.TP
+
+.B PORT
+
+The port to connect to the device. It can be a wired or a bluetooth connection. Default value is set to \fB/dev/ttyUSB0\fP (wire). 
+
+In case of the \fBwire\fP, the port will be \fB/dev/ttyUSBX\fP (type in terminal after connected the headset: dmesg | grep tty to know what port). 
+
+In case of the \fBbluetooth\fP, it will be \fB/dev/rfcommX\fP. 
+.TP
+
+\fBTo Connect the dongle to the headset:
+
+1) To know the dongle BD address (<hci1>): hcitool dev
+
+2) To know the headset address (<headset>): hcitool scan
+
+3) To pair and connect to rfcommX: sudo rfcomm connect -i <hci1> X <headset>
+
+4) Lauch eegdev with |PORT|/dev/rfcommX|
+.TP
+
+\fBTo access the port without sudo, run the commands once:\fP
+
+1) sudo cp <yourPath>/eegdev/auxconfig/90-wsdsi.rules /etc/udev/rules.d/
+
+2) sudo service udev restart
+
+.TP
+
+.B REF
+The electrode to use as reference. Default value is set to \fBA1/2+A2/2\fP (average of both ears). 
+.TP
+
+.B VERBOSE
+The higher the number, the more messages the headset will send to the console (and the more low-level they will tend to be). Default value is set to \fB0\fP.
+.TP
+
+.B SAMPLEBATCH
+The number of samples that should be accumulated in the internal headset's buffer before returning. Default value is set to \fB15\fP.
+.TP
+
+.B BUFFERAHEADSEC
+The bufferAheadSec argument specifies the size of the "cushion" that the API should aim to buffer ahead to smooth out lumps in delivery of the data (it will aim to leave this many excess samples in the buffer after you have read each batch, but note that the actual number of excess samples will fluctuate from one batch to the next. Default value is set to \fB0.06\fP sec.
+.TP
+
+.SH FILES
+.IP "/etc/eegdev/eegdev.conf" 4
+.PD
+Shared configuration file.
+.IP "/etc/eegdev/wsdsi.conf" 4
+.PD
+Configuration file loaded when the plugin is used. The settings specified
+here overrides the settings in the shared configuration file.
+.SH "SEE ALSO"
+.BR egd_open (3),
+.BR eegdev-options (5)
+

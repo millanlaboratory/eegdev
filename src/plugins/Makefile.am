@@ -84,3 +84,8 @@ endif
 q20_la_SOURCES = q20.c ftd2xx.h device-helper.h device-helper.c
 q20_la_LIBADD = $(Q20_LIBS) $(GNULIB)
 
+if EEGO_SUPPORT
+pkglib_LTLIBRARIES += eego.la
+endif
+eego_la_SOURCES = eego.c device-helper.h device-helper.c
+eego_la_LIBADD = $(EEGO_LIBS) $(GNULIB)
