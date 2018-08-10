@@ -5,6 +5,7 @@ EXTRA_DIST = autogen.sh m4/gnulib-cache.m4 README_build
 install-usb-plugdev:
 	@echo "Installing 50-usb-plugdev.rules into /etc/udev/rules.d/ ..." \
 	&& $(INSTALL) $(top_srcdir)/auxconfig/50-usb-plugdev.rules /etc/udev/rules.d \
+	$(INSTALL) $(top_srcdir)/auxconfig/90-eego.rules /etc/udev/rules.d \
 	&& echo "done."
 
 uninstall-usb-plugdev:
