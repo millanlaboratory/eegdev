@@ -340,10 +340,10 @@ static int eego_set_capability(struct eego_eegdev* eegodev,
 
   eegodev->offset[EGD_EEG] = 0;
   eegodev->offset[EGD_SENSOR] = eegodev->NUM_EEG_CH * sizeof(double);
-  eegodev->offset[EGD_TRIGGER] = eegodev->offset[EGD_SENSOR] + (eegodev->NUM_EXG_CH + 1) * sizeof(double);
+  eegodev->offset[EGD_TRIGGER] = eegodev->offset[EGD_SENSOR] + (eegodev->NUM_EXG_CH) * sizeof(double);
   
   dev->ci.set_cap(dev, &cap);
-  dev->ci.set_input_samlen(dev, (eegodev->NCH ) * sizeof(double)); //- 1
+  dev->ci.set_input_samlen(dev, (eegodev->NCH ) * sizeof(double) - 1);
   return 0;
 }
 
@@ -361,7 +361,7 @@ static void* eego_read_fn(void* arg) {
 
   int runacq, buffer_status, bytes_to_allocate, nb_sample, nb_batch, samples_in_bytes;
   double* buffer;
-  samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double); //-1
+  samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double) - 1;
 
   while (1) {
     usleep(100000);
