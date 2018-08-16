@@ -364,17 +364,12 @@ static void* eego_read_fn(void* arg) {
   double* buffer;
   samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double) - 1;
 
-  //struct timespec t0, t1;
   while (1) {
     
     runacq = eegodev->runacq;
     if (!runacq) break;
 
     bytes_to_allocate = eemagine_sdk_prefetch(eegodev->streams_id);
-	//if(bytes_to_allocate > 0) {
-	//	printf("bytes_to_allocate: %d\n", bytes_to_allocate); 
-	//	printf("bytes_to_allocate/channels: %f\n", (float)bytes_to_allocate/(float)(eegodev->stream_nb_channels)); 
-	//}
 	if(bytes_to_allocate > 0) {
 
 	    buffer = malloc(bytes_to_allocate);
@@ -382,11 +377,6 @@ static void* eego_read_fn(void* arg) {
 		ci->update_ringbuffer(&(eegodev->dev), buffer, bytes_to_allocate);
 	   
 	    free(buffer);
-		//clock_gettime(CLOCK_MONOTONIC, &t1);
-
-		//printf("Total  size: %d\n", bytes_to_allocate);
-		//printf("Total  time: %f\n", (double)(t1.tv_nsec - t0.tv_nsec)/1000000.0f);
-		//clock_gettime(CLOCK_MONOTONIC, &t0);
 	}
 
   }
