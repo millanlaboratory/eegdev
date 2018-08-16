@@ -421,7 +421,7 @@ static int prepareMask(struct eego_eegdev* eegodev, const char* optv[]) {
     
     // 64 CA-200 cap
     if (strcmp(optv[3], "200") == 0) {
-      eegodev->ref_mask = (unsigned long long) 0x800000007FFFFFFF; //0xFFFFFFFF7FFFFFFF;
+      eegodev->ref_mask = (unsigned long long) 0xFFFFFFFF7FFFFFFF; //0x800000007FFFFFFF;
       eegodev->eegolabel = &eegolabel200;
     } 
     // 128 CA-203 cap
