@@ -343,7 +343,8 @@ static int eego_set_capability(struct eego_eegdev* eegodev,
   eegodev->offset[EGD_TRIGGER] = eegodev->offset[EGD_SENSOR] + (eegodev->NUM_EXG_CH) * sizeof(double);
   
   dev->ci.set_cap(dev, &cap);
-  dev->ci.set_input_samlen(dev, (eegodev->NCH ) * sizeof(double) - 1);
+  //dev->ci.set_input_samlen(dev, (eegodev->NCH ) * sizeof(double) - 1);
+  dev->ci.set_input_samlen(dev, (eegodev->NCH ) * sizeof(double));
   return 0;
 }
 
@@ -363,25 +364,31 @@ static void* eego_read_fn(void* arg) {
   double* buffer;
   samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double) - 1;
 
+  //struct timespec t0, t1;
   while (1) {
-    usleep(100000);
+    
     runacq = eegodev->runacq;
     if (!runacq) break;
 
     bytes_to_allocate = eemagine_sdk_prefetch(eegodev->streams_id);
-    buffer = malloc(bytes_to_allocate);
-    nb_sample = bytes_to_allocate / sizeof(double);
-    buffer_status = eemagine_sdk_get_data(eegodev->streams_id, buffer, bytes_to_allocate);
-    nb_batch = nb_sample / eegodev->stream_nb_channels;
+	//if(bytes_to_allocate > 0) {
+	//	printf("bytes_to_allocate: %d\n", bytes_to_allocate); 
+	//	printf("bytes_to_allocate/channels: %f\n", (float)bytes_to_allocate/(float)(eegodev->stream_nb_channels)); 
+	//}
+	if(bytes_to_allocate > 0) {
 
-    for (unsigned int j = 0; j < nb_batch; ++j) {
-      // Update the eegdev structure with the new data
-      if (ci->update_ringbuffer(&(eegodev->dev),
-                                &buffer[j * eegodev->stream_nb_channels],
-                                samples_in_bytes))
-        break;
-    }
-    free(buffer);
+	    buffer = malloc(bytes_to_allocate);
+	    buffer_status = eemagine_sdk_get_data(eegodev->streams_id, buffer, bytes_to_allocate);
+		ci->update_ringbuffer(&(eegodev->dev), buffer, bytes_to_allocate);
+	   
+	    free(buffer);
+		//clock_gettime(CLOCK_MONOTONIC, &t1);
+
+		//printf("Total  size: %d\n", bytes_to_allocate);
+		//printf("Total  time: %f\n", (double)(t1.tv_nsec - t0.tv_nsec)/1000000.0f);
+		//clock_gettime(CLOCK_MONOTONIC, &t0);
+	}
+
   }
   return NULL;
 error:
