@@ -377,6 +377,14 @@ static void* eego_read_fn(void* arg) {
 		ci->update_ringbuffer(&(eegodev->dev), buffer, bytes_to_allocate);
 	   
 	    free(buffer);
+	} else {
+		// 2018.08.17 - ltonin
+		// Added the sleep of 500 us to avoid cpu consumption due to free
+		// iterations in the while in case no bytes are available
+		// (byte_to_allocate <= 0).
+		// 500 us should be safe for most of the sampling rate (tested with
+		// SR=512Hz)
+		usleep(500);
 	}
 
   }
