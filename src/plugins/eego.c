@@ -384,7 +384,11 @@ static void* eego_read_fn(void* arg) {
 		// (byte_to_allocate <= 0).
 		// 500 us should be safe for most of the sampling rate (tested with
 		// SR=512Hz)
-		usleep(500);
+		//
+		// 2018.08.21 - ltonin
+		// Change the sleep period to 50 us to be sure to not loose any data. 
+		// Power consumption is ok.
+		usleep(50);
 	}
 
   }
