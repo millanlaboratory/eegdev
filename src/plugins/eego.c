@@ -208,6 +208,11 @@ static void initialize_amplifiers(struct eego_eegdev* eegodev) {
   eegodev->amplifiers_nb =
       eemagine_sdk_get_amplifiers_info(amplifier_info_tmp, 2);
 
+  if(eegodev->amplifiers_nb == 0) {
+    printf("[Error] - No amplifier connected\n");
+    goto error; 
+  }
+
   eegodev->NUM_EEG_CH = 0;
   eegodev->NUM_EXG_CH = 0;
   eegodev->NUM_TRI_CH = 0;
