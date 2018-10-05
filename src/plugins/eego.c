@@ -210,7 +210,6 @@ static void initialize_amplifiers(struct eego_eegdev* eegodev) {
 
   if(eegodev->amplifiers_nb == 0) {
     printf("[Error] - No amplifier connected\n");
-    goto error; 
   }
 
   eegodev->NUM_EEG_CH = 0;
