@@ -208,10 +208,6 @@ static void initialize_amplifiers(struct eego_eegdev* eegodev) {
   eegodev->amplifiers_nb =
       eemagine_sdk_get_amplifiers_info(amplifier_info_tmp, 2);
 
-  if(eegodev->amplifiers_nb == 0) {
-    printf("[Error] - No amplifier connected\n");
-  }
-
   eegodev->NUM_EEG_CH = 0;
   eegodev->NUM_EXG_CH = 0;
   eegodev->NUM_TRI_CH = 0;
@@ -367,7 +363,7 @@ static void* eego_read_fn(void* arg) {
   int runacq, buffer_status, bytes_to_allocate, nb_sample, nb_batch, samples_in_bytes;
   double* buffer;
   samples_in_bytes = (eegodev->stream_nb_channels) * sizeof(double) - 1;
-
+  
   while (1) {
     
     runacq = eegodev->runacq;
@@ -461,6 +457,15 @@ static int eego_open_device(struct devmodule* dev, const char* optv[]) {
   
   // Initialize the amplifiers
   initialize_amplifiers(eegodev);
+
+  // 2018.10.05 - ltonin
+  // Moved the check for the number of amplifier here, to avoid segmentation
+  // fault and return null
+  if(eegodev->amplifiers_nb == 0) {
+    printf("[Error] - No amplifier connected\n");
+	goto error;
+  }
+
   // Prepare the masks in the proper format.
   prepareMask(eegodev, optv);
 
